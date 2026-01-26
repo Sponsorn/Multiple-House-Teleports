@@ -60,17 +60,15 @@ local function InitializeDropdownMenu(self, level, menuList)
         UIDropDownMenu_AddButton(sep, level)
 
         -- Add Current Location (only if at a plot)
-        if addon.db.options.showAddButton then
-            local canAdd = addon:CanAddLocation()
-            local addInfo = UIDropDownMenu_CreateInfo()
-            addInfo.text = canAdd and "|cFF00FF00+ Add Current Location|r" or "|cFF888888+ Add Current Location|r"
-            addInfo.notCheckable = true
-            addInfo.disabled = not canAdd
-            addInfo.func = function()
-                addon:ShowAddLocationDialog()
-            end
-            UIDropDownMenu_AddButton(addInfo, level)
+        local canAdd = addon:CanAddLocation()
+        local addInfo = UIDropDownMenu_CreateInfo()
+        addInfo.text = canAdd and "|cFF00FF00+ Add Current Location|r" or "|cFF888888+ Add Current Location|r"
+        addInfo.notCheckable = true
+        addInfo.disabled = not canAdd
+        addInfo.func = function()
+            addon:ShowAddLocationDialog()
         end
+        UIDropDownMenu_AddButton(addInfo, level)
 
         -- Options
         local optInfo = UIDropDownMenu_CreateInfo()
@@ -305,15 +303,12 @@ local function CreateMinimapIcon()
         label = "House Teleports",
         OnClick = function(self, button)
             if button == "LeftButton" then
-                ShowDropdownMenu(self)
-            elseif button == "RightButton" then
                 addon:OpenOptions()
             end
         end,
         OnTooltipShow = function(tooltip)
             tooltip:AddLine("Multiple House Teleports")
-            tooltip:AddLine("|cFFFFFFFFLeft-click:|r Show teleport menu", 1, 1, 1)
-            tooltip:AddLine("|cFFFFFFFFRight-click:|r Open options", 1, 1, 1)
+            tooltip:AddLine("|cFFFFFFFFLeft-click:|r Open options", 1, 1, 1)
 
             local count = addon:GetLocationCount()
             if count > 0 then

@@ -22,10 +22,9 @@ local eventHandlers = {}
 local DB_DEFAULTS = {
     teleports = {},
     minimap = {
-        hide = false,
+        hide = true,                -- Hidden by default
     },
     options = {
-        showAddButton = true,       -- Show "Add Current Location" in menu when at a plot
         confirmDelete = true,       -- Confirm before deleting a location
     },
 }
@@ -34,15 +33,14 @@ local DB_DEFAULTS = {
 -- Utility Functions
 -------------------------------------------------------------------------------
 
-local function Print(msg)
+function addon:Print(msg)
     print("|cFF88AAFF[MHT]|r " .. tostring(msg))
 end
-addon.Print = Print
 
 local function safeCall(fn, ...)
     local success, err = pcall(fn, ...)
     if not success then
-        Print("Error: " .. tostring(err))
+        addon:Print("Error: " .. tostring(err))
     end
     return success
 end
@@ -145,8 +143,6 @@ function addon:OnLogin()
     -- Register housing events
     self:RegisterEvent("HOUSE_PLOT_ENTERED", self.OnPlotEntered)
     self:RegisterEvent("CURRENT_HOUSE_INFO_RECIEVED", self.OnHouseInfoReceived)
-
-    Print("v" .. self.version .. " loaded. Use /mht for commands.")
 end
 
 -------------------------------------------------------------------------------

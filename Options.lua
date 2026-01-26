@@ -178,6 +178,10 @@ local function CreateLocationRow(parent, index, location, totalCount)
                 addon:Print("Drag it from the Macro panel (|cFFFFCC00/macro|r) to your action bar.")
                 macroBtn:Disable()
                 macroBtn:SetText("Macro Exists")
+                -- Update macro slots counter
+                if optionsFrame and optionsFrame.UpdateMacroSlotsText then
+                    optionsFrame.UpdateMacroSlotsText()
+                end
             else
                 addon:Print("|cFFFF4444Failed to create macro.|r")
             end
@@ -209,10 +213,16 @@ end
 function addon:RefreshOptionsLocations()
     if not locationsScrollBox then return end
 
-    -- Clear existing children
+    -- Clear existing children (frames)
     for _, child in pairs({locationsScrollBox.content:GetChildren()}) do
         child:Hide()
         child:SetParent(nil)
+    end
+
+    -- Clear existing regions (font strings, textures)
+    for _, region in pairs({locationsScrollBox.content:GetRegions()}) do
+        region:Hide()
+        region:SetParent(nil)
     end
 
     local locations = self:GetLocations()
@@ -234,6 +244,11 @@ function addon:RefreshOptionsLocations()
         end
         locationsScrollBox.content:SetHeight(math.max(80, #locations * 36))
     end
+
+    -- Update macro slots counter
+    if optionsFrame and optionsFrame.UpdateMacroSlotsText then
+        optionsFrame.UpdateMacroSlotsText()
+    end
 end
 
 -------------------------------------------------------------------------------
@@ -244,59 +259,63 @@ local function CreateOptionsFrame()
     local frame = CreateFrame("Frame", "MHT_OptionsFrame", UIParent)
     frame:Hide()
 
+    -- Main scroll frame for entire panel
+    local mainScroll = CreateFrame("ScrollFrame", "MHT_OptionsScrollFrame", frame, "UIPanelScrollFrameTemplate")
+    mainScroll:SetPoint("TOPLEFT", 0, 0)
+    mainScroll:SetPoint("BOTTOMRIGHT", -24, 0)
+
+    local panel = CreateFrame("Frame", nil, mainScroll)
+    panel:SetWidth(550)
+    panel:SetHeight(800)
+    mainScroll:SetScrollChild(panel)
+
+    -- Update panel width when scroll frame resizes
+    mainScroll:SetScript("OnSizeChanged", function(self)
+        local width = self:GetWidth()
+        if width and width > 0 then
+            panel:SetWidth(width)
+        end
+    end)
+
     -- Title
-    local title = frame:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
+    local title = panel:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
     title:SetPoint("TOPLEFT", 16, -16)
     title:SetText("Multiple House Teleports")
 
     -- Version
-    local version = frame:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+    local version = panel:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
     version:SetPoint("LEFT", title, "RIGHT", 8, 0)
     version:SetText("|cFF888888v" .. (addon.version or "1.0.0") .. "|r")
 
     -- Description
-    local desc = frame:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+    local desc = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
     desc:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -8)
-    desc:SetPoint("RIGHT", frame, "RIGHT", -16, 0)
+    desc:SetPoint("RIGHT", panel, "RIGHT", -16, 0)
     desc:SetJustifyH("LEFT")
     desc:SetText("Save multiple housing plot locations and teleport between them.")
 
     ---------------------------------------------------------------------------
     -- General Settings Section
     ---------------------------------------------------------------------------
-    local generalHeader = CreateSectionHeader(frame, "General Settings", desc, -20)
-
-    local showAddCheck = CreateCheckbox(
-        frame,
-        "Show 'Add Location' in Menu",
-        "Show the 'Add Current Location' option in the dropdown menu when you're at a plot.",
-        generalHeader, -8,
-        function() return addon.db.options.showAddButton end,
-        function(value) addon.db.options.showAddButton = value end
-    )
+    local generalHeader = CreateSectionHeader(panel, "General Settings", desc, -20)
 
     local confirmDeleteCheck = CreateCheckbox(
-        frame,
+        panel,
         "Confirm Before Deleting",
         "Show a confirmation dialog before deleting a saved location.",
-        showAddCheck, -4,
+        generalHeader, -8,
         function() return addon.db.options.confirmDelete end,
         function(value) addon.db.options.confirmDelete = value end
     )
 
-    ---------------------------------------------------------------------------
-    -- Minimap Section
-    ---------------------------------------------------------------------------
-    local minimapHeader = CreateSectionHeader(frame, "Minimap", confirmDeleteCheck, -20)
-
     local hideMinimapCheck = CreateCheckbox(
-        frame,
-        "Hide Minimap Icon",
-        "Hide the minimap button. You can still use /mht commands.",
-        minimapHeader, -8,
-        function() return addon.db.minimap.hide end,
+        panel,
+        "Show Minimap Icon",
+        "Show the minimap button for quick access to options.",
+        confirmDeleteCheck, -4,
+        function() return not addon.db.minimap.hide end,
         function(value)
-            addon.db.minimap.hide = value
+            addon.db.minimap.hide = not value
             addon:ToggleMinimapIcon()
         end
     )
@@ -304,12 +323,12 @@ local function CreateOptionsFrame()
     ---------------------------------------------------------------------------
     -- Saved Locations Section
     ---------------------------------------------------------------------------
-    local locationsHeader = CreateSectionHeader(frame, "Saved Locations", hideMinimapCheck, -20)
+    local locationsHeader = CreateSectionHeader(panel, "Saved Locations", hideMinimapCheck, -20)
 
     -- Scroll frame for locations
-    local scrollContainer = CreateFrame("Frame", nil, frame, "BackdropTemplate")
+    local scrollContainer = CreateFrame("Frame", nil, panel, "BackdropTemplate")
     scrollContainer:SetPoint("TOPLEFT", locationsHeader, "BOTTOMLEFT", 0, -12)
-    scrollContainer:SetPoint("RIGHT", frame, "RIGHT", -16, 0)
+    scrollContainer:SetPoint("RIGHT", panel, "RIGHT", -16, 0)
     scrollContainer:SetHeight(180)
     scrollContainer:SetBackdrop({
         bgFile = "Interface\\Buttons\\WHITE8x8",
@@ -336,14 +355,14 @@ local function CreateOptionsFrame()
     end)
 
     -- Description text about macros
-    local macroDesc = frame:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+    local macroDesc = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
     macroDesc:SetPoint("TOPLEFT", scrollContainer, "BOTTOMLEFT", 0, -8)
-    macroDesc:SetPoint("RIGHT", frame, "RIGHT", -16, 0)
+    macroDesc:SetPoint("RIGHT", panel, "RIGHT", -16, 0)
     macroDesc:SetJustifyH("LEFT")
     macroDesc:SetText("Each location creates a macro. Drag macros from |cFFFFCC00/macro|r to your action bar.")
 
     -- Macro slots text
-    local macroSlotsText = frame:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+    local macroSlotsText = panel:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
     macroSlotsText:SetPoint("TOPLEFT", macroDesc, "BOTTOMLEFT", 0, -4)
     macroSlotsText:SetJustifyH("LEFT")
 
@@ -355,7 +374,7 @@ local function CreateOptionsFrame()
     end
 
     -- Add Location button (left side)
-    local addLocationBtn = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
+    local addLocationBtn = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
     addLocationBtn:SetSize(160, 28)
     addLocationBtn:SetPoint("TOPLEFT", macroSlotsText, "BOTTOMLEFT", 0, -8)
     addLocationBtn:SetText("Add Current Location")
@@ -372,12 +391,26 @@ local function CreateOptionsFrame()
         GameTooltip:Hide()
     end)
 
+    -- Open Macro Window button (next to Add Location)
+    local openMacroBtn = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+    openMacroBtn:SetSize(140, 28)
+    openMacroBtn:SetPoint("LEFT", addLocationBtn, "RIGHT", 8, 0)
+    openMacroBtn:SetText("Open Macro Window")
+    openMacroBtn:SetScript("OnClick", function()
+        if not MacroFrame then
+            MacroFrame_LoadUI()
+        end
+        if MacroFrame then
+            ShowUIPanel(MacroFrame)
+        end
+    end)
+
     -- Create Default Home Macro button (right side)
     local homeMacroName = "MHT 0: My Home"
-    local defaultMacroBtn = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
+    local defaultMacroBtn = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
     defaultMacroBtn:SetSize(170, 28)
     defaultMacroBtn:SetPoint("TOP", addLocationBtn, "TOP", 0, 0)
-    defaultMacroBtn:SetPoint("RIGHT", frame, "RIGHT", -16, 0)
+    defaultMacroBtn:SetPoint("RIGHT", panel, "RIGHT", -16, 0)
     defaultMacroBtn:SetText("Create Home Macro")
     defaultMacroBtn.macroName = homeMacroName
 
@@ -457,6 +490,11 @@ local function CreateOptionsFrame()
     end
 
     frame:SetScript("OnShow", function(self)
+        -- Update panel width to match scroll frame
+        local width = mainScroll:GetWidth()
+        if width and width > 0 then
+            panel:SetWidth(width)
+        end
         addon:RefreshOptionsLocations()
         UpdateAddButtonState()
         UpdateMacroSlotsText()
@@ -467,13 +505,31 @@ local function CreateOptionsFrame()
     end)
 
     ---------------------------------------------------------------------------
+    -- Troubleshooting Section
+    ---------------------------------------------------------------------------
+    local troubleshootHeader = CreateSectionHeader(panel, "Troubleshooting", addLocationBtn, -20)
+
+    local troubleshootText = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+    troubleshootText:SetPoint("TOPLEFT", troubleshootHeader, "BOTTOMLEFT", 0, -8)
+    troubleshootText:SetPoint("RIGHT", panel, "RIGHT", -16, 0)
+    troubleshootText:SetJustifyH("LEFT")
+    troubleshootText:SetSpacing(4)
+    troubleshootText:SetText(
+        "|cFFFF6666Common reasons for \"Permission denied\":|r\n" ..
+        "- Teleporting to a plot in a public neighborhood (not allowed)\n" ..
+        "- Plot owner has access set to \"No one\" or restricted\n" ..
+        "- You are not on the owner's friends/guild list (if required)\n" ..
+        "- The plot no longer exists or owner moved"
+    )
+
+    ---------------------------------------------------------------------------
     -- Commands Section
     ---------------------------------------------------------------------------
-    local commandsHeader = CreateSectionHeader(frame, "Commands", addLocationBtn, -20)
+    local commandsHeader = CreateSectionHeader(panel, "Commands", troubleshootText, -20)
 
-    local commandsText = frame:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+    local commandsText = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
     commandsText:SetPoint("TOPLEFT", commandsHeader, "BOTTOMLEFT", 0, -8)
-    commandsText:SetPoint("RIGHT", frame, "RIGHT", -16, 0)
+    commandsText:SetPoint("RIGHT", panel, "RIGHT", -16, 0)
     commandsText:SetJustifyH("LEFT")
     commandsText:SetSpacing(4)
     commandsText:SetText(
