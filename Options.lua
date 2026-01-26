@@ -156,10 +156,19 @@ local function CreateLocationRow(parent, index, location, totalCount)
     end)
 
     -- Create Macro button - creates a macro for this teleport location
+    local macroName = "MHT " .. index .. ":"
     local macroBtn = CreateFrame("Button", nil, buttonContainer, "UIPanelButtonTemplate")
     macroBtn:SetSize(85, 24)
     macroBtn:SetPoint("RIGHT", renameBtn, "LEFT", -4, 0)
     macroBtn:SetText("Create Macro")
+
+    -- Check if macro already exists and disable button if so
+    local existingMacro = GetMacroIndexByName(macroName)
+    if existingMacro and existingMacro > 0 then
+        macroBtn:Disable()
+        macroBtn:SetText("Macro Exists")
+    end
+
     macroBtn:SetScript("OnClick", function()
         -- Set up the secure button (hidden, for macro use)
         local secureBtn = addon:GetSecureTeleportButton(index)
@@ -168,7 +177,6 @@ local function CreateLocationRow(parent, index, location, totalCount)
         end
 
         -- Create the macro
-        local macroName = "MHT: " .. location.name
         local macroBody = "/click " .. secureBtn:GetName()
 
         -- Use numbered icons (texture IDs for 1-9) or home icon for 10+
@@ -179,34 +187,28 @@ local function CreateLocationRow(parent, index, location, totalCount)
             macroIcon = 7252953  -- ui_homestone_64
         end
 
-        -- Check if macro already exists
-        local existingIndex = GetMacroIndexByName(macroName)
-        if existingIndex and existingIndex > 0 then
-            -- Update existing macro
-            EditMacro(existingIndex, macroName, macroIcon, macroBody)
-            addon:Print("Updated macro: |cFFFFCC00" .. macroName .. "|r")
-        else
-            -- Check macro limits
-            local numGlobal, numPerChar = GetNumMacros()
-            if numGlobal < MAX_ACCOUNT_MACROS then
-                -- Create new global macro
-                local newIndex = CreateMacro(macroName, macroIcon, macroBody, false)
-                if newIndex then
-                    addon:Print("Created macro: |cFFFFCC00" .. macroName .. "|r")
-                    addon:Print("Drag it from the Macro panel (|cFFFFCC00/macro|r) to your action bar.")
-                else
-                    addon:Print("|cFFFF4444Failed to create macro.|r")
-                end
+        -- Check macro limits
+        local numGlobal, numPerChar = GetNumMacros()
+        if numGlobal < MAX_ACCOUNT_MACROS then
+            -- Create new global macro
+            local newIndex = CreateMacro(macroName, macroIcon, macroBody, false)
+            if newIndex then
+                addon:Print("Created macro: |cFFFFCC00" .. macroName .. "|r")
+                addon:Print("Drag it from the Macro panel (|cFFFFCC00/macro|r) to your action bar.")
+                macroBtn:Disable()
+                macroBtn:SetText("Macro Exists")
             else
-                addon:Print("|cFFFF4444Macro limit reached!|r You have " .. numGlobal .. "/" .. MAX_ACCOUNT_MACROS .. " account macros.")
-                addon:Print("Delete an unused macro or manually create: |cFFFFCC00" .. macroBody .. "|r")
+                addon:Print("|cFFFF4444Failed to create macro.|r")
             end
+        else
+            addon:Print("|cFFFF4444Macro limit reached!|r You have " .. numGlobal .. "/" .. MAX_ACCOUNT_MACROS .. " account macros.")
+            addon:Print("Delete an unused macro or manually create: |cFFFFCC00" .. macroBody .. "|r")
         end
     end)
     macroBtn:SetScript("OnEnter", function(self)
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
         GameTooltip:SetText("Create Teleport Macro", 1, 1, 1)
-        GameTooltip:AddLine("Creates a macro to teleport to " .. location.name .. ".", 0.8, 0.8, 0.8, true)
+        GameTooltip:AddLine("Creates macro |cFFFFCC00" .. macroName .. "|r to teleport to " .. location.name .. ".", 0.8, 0.8, 0.8, true)
         GameTooltip:AddLine(" ")
         GameTooltip:AddLine("After creating, drag the macro from", 0.6, 0.6, 0.6, true)
         GameTooltip:AddLine("the Macro panel to your action bar.", 0.6, 0.6, 0.6, true)
@@ -353,20 +355,33 @@ local function CreateOptionsFrame()
     end)
 
     -- Create Default Home Macro button
+    local homeMacroName = "MHT 0:"
     local defaultMacroBtn = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
     defaultMacroBtn:SetSize(170, 28)
     defaultMacroBtn:SetPoint("TOPLEFT", scrollContainer, "BOTTOMLEFT", 0, -12)
     defaultMacroBtn:SetText("Create Home Macro")
+    defaultMacroBtn.macroName = homeMacroName
+
+    -- Function to update button state based on macro existence
+    local function UpdateHomeMacroButtonState()
+        local existingMacro = GetMacroIndexByName(homeMacroName)
+        if existingMacro and existingMacro > 0 then
+            defaultMacroBtn:Disable()
+            defaultMacroBtn:SetText("Home Macro Exists")
+        else
+            defaultMacroBtn:Enable()
+            defaultMacroBtn:SetText("Create Home Macro")
+        end
+    end
+
     defaultMacroBtn:SetScript("OnClick", function(self)
         self:SetText("Loading...")
         self:Disable()
 
         addon:RequestPlayerHouseInfo(function(houseInfo)
-            self:SetText("Create Home Macro")
-            self:Enable()
-
             if not houseInfo then
                 addon:Print("|cFFFF4444Could not get your home info. Do you own a house?|r")
+                UpdateHomeMacroButtonState()
                 return
             end
 
@@ -374,41 +389,41 @@ local function CreateOptionsFrame()
             local btn = addon:GetDefaultHomeButton()
 
             -- Create the macro
-            local macroName = "MHT: My Home"
             local macroBody = "/click " .. btn:GetName()
             local macroIcon = 7252953  -- ui_homestone_64
 
-            -- Check if macro already exists
-            local existingIndex = GetMacroIndexByName(macroName)
-            if existingIndex and existingIndex > 0 then
-                EditMacro(existingIndex, macroName, macroIcon, macroBody)
-                addon:Print("Updated macro: |cFFFFCC00" .. macroName .. "|r")
-            else
-                local numGlobal, numPerChar = GetNumMacros()
-                if numGlobal < MAX_ACCOUNT_MACROS then
-                    local newIndex = CreateMacro(macroName, macroIcon, macroBody, false)
-                    if newIndex then
-                        addon:Print("Created macro: |cFFFFCC00" .. macroName .. "|r")
-                        addon:Print("Drag it from the Macro panel (|cFFFFCC00/macro|r) to your action bar.")
-                    else
-                        addon:Print("|cFFFF4444Failed to create macro.|r")
-                    end
+            local numGlobal, numPerChar = GetNumMacros()
+            if numGlobal < MAX_ACCOUNT_MACROS then
+                local newIndex = CreateMacro(homeMacroName, macroIcon, macroBody, false)
+                if newIndex then
+                    addon:Print("Created macro: |cFFFFCC00" .. homeMacroName .. "|r")
+                    addon:Print("Drag it from the Macro panel (|cFFFFCC00/macro|r) to your action bar.")
+                    self:SetText("Home Macro Exists")
+                    -- Keep disabled since macro now exists
                 else
-                    addon:Print("|cFFFF4444Macro limit reached!|r")
-                    addon:Print("Manually create: |cFFFFCC00" .. macroBody .. "|r")
+                    addon:Print("|cFFFF4444Failed to create macro.|r")
+                    UpdateHomeMacroButtonState()
                 end
+            else
+                addon:Print("|cFFFF4444Macro limit reached!|r")
+                addon:Print("Manually create: |cFFFFCC00" .. macroBody .. "|r")
+                UpdateHomeMacroButtonState()
             end
         end)
     end)
     defaultMacroBtn:SetScript("OnEnter", function(self)
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
         GameTooltip:SetText("Create Home Macro", 1, 1, 1)
-        GameTooltip:AddLine("Creates a macro to teleport to your own home.", 0.8, 0.8, 0.8, true)
+        GameTooltip:AddLine("Creates macro |cFFFFCC00" .. homeMacroName .. "|r to teleport to your own home.", 0.8, 0.8, 0.8, true)
         GameTooltip:Show()
     end)
     defaultMacroBtn:SetScript("OnLeave", function()
         GameTooltip:Hide()
     end)
+
+    -- Store reference for updating on show
+    frame.defaultMacroBtn = defaultMacroBtn
+    frame.UpdateHomeMacroButtonState = UpdateHomeMacroButtonState
 
     -- Add Location button
     local addLocationBtn = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
@@ -439,9 +454,13 @@ local function CreateOptionsFrame()
         end
     end
 
-    frame:SetScript("OnShow", function()
+    frame:SetScript("OnShow", function(self)
         addon:RefreshOptionsLocations()
         UpdateAddButtonState()
+        -- Update home macro button state
+        if self.UpdateHomeMacroButtonState then
+            self.UpdateHomeMacroButtonState()
+        end
     end)
 
     ---------------------------------------------------------------------------

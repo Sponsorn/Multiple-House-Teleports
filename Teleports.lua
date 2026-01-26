@@ -313,8 +313,8 @@ function addon:RemoveLocation(index)
     local location = self.db.teleports[index]
     local name = location.name
 
-    -- Delete associated macro if it exists
-    local macroName = "MHT: " .. name
+    -- Delete associated macro if it exists (uses new naming format)
+    local macroName = "MHT " .. index .. ":"
     local macroIndex = GetMacroIndexByName(macroName)
     if macroIndex and macroIndex > 0 then
         DeleteMacro(macroIndex)
