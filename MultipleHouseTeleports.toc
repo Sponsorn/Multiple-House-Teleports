@@ -1,0 +1,22 @@
+## Interface: 120000, 120001
+## Title: Multiple House Teleports
+## Notes: Save and teleport to multiple housing locations.
+## Author: Sponsorn
+## Version: 1.0.0
+## SavedVariables: MultipleHouseTeleportsDB
+## DefaultState: enabled
+## IconTexture: Interface\Icons\Spell_Shadow_Teleport
+
+# Libraries
+Libs\LibStub.lua
+Libs\CallbackHandler-1.0\CallbackHandler-1.0.lua
+Libs\AceGUI-3.0\AceGUI-3.0.xml
+Libs\AceConfig-3.0\AceConfig-3.0.xml
+Libs\LibDataBroker-1.1.lua
+Libs\LibDBIcon-1.0.lua
+
+# Core
+Core.lua
+Teleports.lua
+UI.lua
+Options.lua

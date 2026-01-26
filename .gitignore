@@ -1,0 +1,17 @@
+# MacOS
+.DS_Store
+
+# Windows
+Thumbs.db
+desktop.ini
+
+# Editors
+*.swp
+*.swo
+*~
+.idea/
+.vscode/
+
+# Release
+*.zip
+release/
