@@ -313,8 +313,8 @@ function addon:RemoveLocation(index)
     local location = self.db.teleports[index]
     local name = location.name
 
-    -- Delete associated macro if it exists (uses new naming format)
-    local macroName = "MHT " .. index .. ":"
+    -- Delete associated macro if it exists (uses naming format: MHT #: name)
+    local macroName = "MHT " .. index .. ": " .. name
     local macroIndex = GetMacroIndexByName(macroName)
     if macroIndex and macroIndex > 0 then
         DeleteMacro(macroIndex)
@@ -344,6 +344,20 @@ function addon:RenameLocation(index, newName)
     end
 
     local oldName = self.db.teleports[index].name
+
+    -- Update macro name if it exists
+    local oldMacroName = "MHT " .. index .. ": " .. oldName
+    local newMacroName = "MHT " .. index .. ": " .. newName
+    local macroIndex = GetMacroIndexByName(oldMacroName)
+    if macroIndex and macroIndex > 0 then
+        -- Get existing macro info to preserve icon and body
+        local name, icon, body = GetMacroInfo(macroIndex)
+        if body then
+            EditMacro(macroIndex, newMacroName, icon, body)
+            self:Print("Updated macro: " .. newMacroName)
+        end
+    end
+
     self.db.teleports[index].name = newName
     self:Print("Renamed '" .. oldName .. "' to '" .. newName .. "'")
 

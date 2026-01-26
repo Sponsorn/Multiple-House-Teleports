@@ -120,7 +120,7 @@ local function CreateLocationRow(parent, index, location, totalCount)
     local downBtn = CreateFrame("Button", nil, buttonContainer, "UIPanelButtonTemplate")
     downBtn:SetSize(28, 24)
     downBtn:SetPoint("RIGHT", deleteBtn, "LEFT", -4, 0)
-    downBtn:SetText("↓")
+    downBtn:SetText("|TInterface\\Buttons\\Arrow-Down-Up:12:12:0:-3|t")
     local canMoveDown = index < totalCount
     downBtn:SetEnabled(canMoveDown)
     downBtn:SetScript("OnClick", function()
@@ -135,7 +135,7 @@ local function CreateLocationRow(parent, index, location, totalCount)
     local upBtn = CreateFrame("Button", nil, buttonContainer, "UIPanelButtonTemplate")
     upBtn:SetSize(28, 24)
     upBtn:SetPoint("RIGHT", downBtn, "LEFT", -2, 0)
-    upBtn:SetText("▲")
+    upBtn:SetText("|TInterface\\Buttons\\Arrow-Up-Up:12:12:0:3|t")
     local canMoveUp = index > 1
     upBtn:SetEnabled(canMoveUp)
     upBtn:SetScript("OnClick", function()
@@ -156,7 +156,7 @@ local function CreateLocationRow(parent, index, location, totalCount)
     end)
 
     -- Create Macro button - creates a macro for this teleport location
-    local macroName = "MHT " .. index .. ":"
+    local macroName = "MHT " .. index .. ": " .. location.name
     local macroBtn = CreateFrame("Button", nil, buttonContainer, "UIPanelButtonTemplate")
     macroBtn:SetSize(85, 24)
     macroBtn:SetPoint("RIGHT", renameBtn, "LEFT", -4, 0)
@@ -355,7 +355,7 @@ local function CreateOptionsFrame()
     end)
 
     -- Create Default Home Macro button
-    local homeMacroName = "MHT 0:"
+    local homeMacroName = "MHT 0: My Home"
     local defaultMacroBtn = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
     defaultMacroBtn:SetSize(170, 28)
     defaultMacroBtn:SetPoint("TOPLEFT", scrollContainer, "BOTTOMLEFT", 0, -12)
