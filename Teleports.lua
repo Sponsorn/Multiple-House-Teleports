@@ -1,6 +1,195 @@
 local ADDON_NAME, addon = ...
 
 -------------------------------------------------------------------------------
+-- Secure Teleport Button Pool
+-------------------------------------------------------------------------------
+
+local secureTeleportButtons = {}
+local TeleportButtonMixin = {}
+
+function TeleportButtonMixin:SetTeleportAction(neighborhoodGUID, houseGUID, plotID)
+    self.neighborhoodGUID = neighborhoodGUID
+    self.houseGUID = houseGUID
+    self.plotID = plotID
+
+    if InCombatLockdown() then
+        self:RegisterEvent("PLAYER_REGEN_ENABLED")
+        self.pendingSetup = true
+    else
+        self:UnregisterEvent("PLAYER_REGEN_ENABLED")
+        self.pendingSetup = false
+        self:SetAttribute("useOnKeyDown", false)
+        self:RegisterForClicks("AnyDown", "AnyUp")
+        if neighborhoodGUID and houseGUID and plotID then
+            self:SetAttribute("type", "teleporthome")
+            self:SetAttribute("house-neighborhood-guid", neighborhoodGUID)
+            self:SetAttribute("house-guid", houseGUID)
+            self:SetAttribute("house-plot-id", plotID)
+        else
+            self:SetAttribute("type", nil)
+        end
+    end
+end
+
+function TeleportButtonMixin:OnEvent(event)
+    if event == "PLAYER_REGEN_ENABLED" and self.pendingSetup then
+        self:SetTeleportAction(self.neighborhoodGUID, self.houseGUID, self.plotID)
+    end
+end
+
+local function CreateSecureTeleportButton(index)
+    local btn = CreateFrame("Button", "MHT_TeleportButton" .. index, UIParent, "SecureActionButtonTemplate")
+    Mixin(btn, TeleportButtonMixin)
+    btn:SetSize(70, 24)
+    btn:Hide()
+    btn:SetScript("OnEvent", btn.OnEvent)
+    btn.locationIndex = index
+
+    -- PostClick to show feedback
+    btn:SetScript("PostClick", function(self)
+        local location = addon.db and addon.db.teleports and addon.db.teleports[self.locationIndex]
+        if location then
+            addon:Print("Teleporting to: " .. location.name)
+        end
+    end)
+
+    -- Make it look like a button
+    btn:SetNormalFontObject("GameFontNormalSmall")
+    btn:SetHighlightFontObject("GameFontHighlightSmall")
+    btn:SetText("Teleport")
+
+    -- Add visual styling to match UIPanelButtonTemplate
+    local ntex = btn:CreateTexture()
+    ntex:SetTexture("Interface\\Buttons\\UI-Panel-Button-Up")
+    ntex:SetTexCoord(0, 0.625, 0, 0.6875)
+    ntex:SetAllPoints()
+    btn:SetNormalTexture(ntex)
+
+    local htex = btn:CreateTexture()
+    htex:SetTexture("Interface\\Buttons\\UI-Panel-Button-Highlight")
+    htex:SetTexCoord(0, 0.625, 0, 0.6875)
+    htex:SetAllPoints()
+    btn:SetHighlightTexture(htex)
+
+    local ptex = btn:CreateTexture()
+    ptex:SetTexture("Interface\\Buttons\\UI-Panel-Button-Down")
+    ptex:SetTexCoord(0, 0.625, 0, 0.6875)
+    ptex:SetAllPoints()
+    btn:SetPushedTexture(ptex)
+
+    return btn
+end
+
+function addon:GetSecureTeleportButton(index)
+    if not secureTeleportButtons[index] then
+        secureTeleportButtons[index] = CreateSecureTeleportButton(index)
+    end
+    return secureTeleportButtons[index]
+end
+
+-------------------------------------------------------------------------------
+-- Default Home Button (index 0)
+-------------------------------------------------------------------------------
+
+local defaultHomeButton
+local defaultHomeInfo
+
+local function CreateDefaultHomeButton()
+    local btn = CreateFrame("Button", "MHT_DefaultHomeButton", UIParent, "SecureActionButtonTemplate")
+    Mixin(btn, TeleportButtonMixin)
+    btn:SetSize(1, 1)
+    btn:SetPoint("BOTTOMRIGHT", UIParent, "TOPLEFT", -1, -1)
+    btn:Hide()
+    btn:SetScript("OnEvent", btn.OnEvent)
+
+    btn:SetScript("PostClick", function(self)
+        addon:Print("Teleporting to your home...")
+    end)
+
+    return btn
+end
+
+function addon:GetDefaultHomeButton()
+    if not defaultHomeButton then
+        defaultHomeButton = CreateDefaultHomeButton()
+    end
+    return defaultHomeButton
+end
+
+function addon:SetupDefaultHomeButton(houseInfo)
+    local btn = self:GetDefaultHomeButton()
+    if houseInfo and houseInfo.neighborhoodGUID and houseInfo.houseGUID and houseInfo.plotID then
+        defaultHomeInfo = houseInfo
+        btn:SetTeleportAction(houseInfo.neighborhoodGUID, houseInfo.houseGUID, houseInfo.plotID)
+        return true
+    end
+    return false
+end
+
+function addon:RequestPlayerHouseInfo(callback)
+    -- Request the player's owned houses from the server
+    if not C_Housing or not C_Housing.GetPlayerOwnedHouses then
+        if callback then callback(nil) end
+        return
+    end
+
+    -- Register for the response event
+    local frame = CreateFrame("Frame")
+    frame:RegisterEvent("PLAYER_HOUSE_LIST_UPDATED")
+    frame:SetScript("OnEvent", function(self, event, houseInfoList)
+        self:UnregisterEvent("PLAYER_HOUSE_LIST_UPDATED")
+        self:SetScript("OnEvent", nil)
+
+        if houseInfoList and #houseInfoList > 0 then
+            -- Use the first house (primary home)
+            local houseInfo = houseInfoList[1]
+            addon:SetupDefaultHomeButton(houseInfo)
+            if callback then callback(houseInfo) end
+        else
+            if callback then callback(nil) end
+        end
+    end)
+
+    -- Request the house list
+    C_Housing.GetPlayerOwnedHouses()
+end
+
+function addon:GetDefaultHomeInfo()
+    return defaultHomeInfo
+end
+
+function addon:SetupSecureTeleportButton(index, location, parentButton)
+    local btn = self:GetSecureTeleportButton(index)
+
+    if location and location.neighborhoodGUID and location.houseGUID and location.plotID then
+        btn:SetTeleportAction(location.neighborhoodGUID, location.houseGUID, location.plotID)
+
+        if parentButton then
+            btn:SetParent(parentButton:GetParent())
+            btn:ClearAllPoints()
+            btn:SetAllPoints(parentButton)
+            btn:SetFrameLevel(parentButton:GetFrameLevel() + 10)
+            btn:Show()
+            -- Hide the original button's text since secure button shows its own
+            parentButton:SetAlpha(0)
+        end
+    else
+        btn:Hide()
+        if parentButton then
+            parentButton:SetAlpha(1)
+        end
+    end
+
+    return btn
+end
+
+function addon:HideAllSecureTeleportButtons()
+    for _, btn in pairs(secureTeleportButtons) do
+        btn:Hide()
+    end
+end
+
+-------------------------------------------------------------------------------
 -- Teleport Data Management
 -------------------------------------------------------------------------------
 
@@ -39,10 +228,17 @@ function addon:GetCurrentLocationInfo()
         return nil
     end
 
+    -- Try to get neighborhood name
+    local neighborhoodName = nil
+    if houseInfo.neighborhoodGUID and C_HousingNeighborhood and C_HousingNeighborhood.GetNeighborhoodName then
+        neighborhoodName = C_HousingNeighborhood.GetNeighborhoodName(houseInfo.neighborhoodGUID)
+    end
+
     return {
         neighborhoodGUID = houseInfo.neighborhoodGUID,
         houseGUID = houseInfo.houseGUID,
         plotID = houseInfo.plotID,
+        neighborhoodName = neighborhoodName,
         -- Try to get a reasonable default name
         ownerName = houseInfo.ownerName,
         plotName = houseInfo.plotName,
@@ -93,6 +289,7 @@ function addon:AddCurrentLocation(name)
         neighborhoodGUID = info.neighborhoodGUID,
         houseGUID = info.houseGUID,
         plotID = info.plotID,
+        neighborhoodName = info.neighborhoodName,
         addedAt = time(),
     }
 
@@ -115,6 +312,14 @@ function addon:RemoveLocation(index)
 
     local location = self.db.teleports[index]
     local name = location.name
+
+    -- Delete associated macro if it exists
+    local macroName = "MHT: " .. name
+    local macroIndex = GetMacroIndexByName(macroName)
+    if macroIndex and macroIndex > 0 then
+        DeleteMacro(macroIndex)
+        self:Print("Deleted macro: " .. macroName)
+    end
 
     table.remove(self.db.teleports, index)
     self:Print("Removed location: " .. name)
@@ -175,6 +380,16 @@ end
 -- Teleportation
 -------------------------------------------------------------------------------
 
+-- Get the macro text to teleport to a location
+function addon:GetTeleportMacro(index)
+    local btn = self:GetSecureTeleportButton(index)
+    if btn then
+        return "/click " .. btn:GetName()
+    end
+    return nil
+end
+
+-- Called from dropdown - can't use secure button, so show message
 function addon:TeleportTo(index)
     local location = self.db.teleports[index]
     if not location then
@@ -182,27 +397,25 @@ function addon:TeleportTo(index)
         return false
     end
 
-    if not C_Housing or not C_Housing.TeleportHome then
-        self:Print("Housing API not available")
-        return false
+    -- Set up the secure button for this location
+    local btn = self:GetSecureTeleportButton(index)
+    if location.neighborhoodGUID and location.houseGUID and location.plotID then
+        btn:SetTeleportAction(location.neighborhoodGUID, location.houseGUID, location.plotID)
     end
 
-    -- Execute the teleport
-    local success = pcall(function()
-        C_Housing.TeleportHome(
-            location.neighborhoodGUID,
-            location.houseGUID,
-            location.plotID
-        )
-    end)
+    -- Show message about how to teleport
+    self:Print("To teleport to '" .. location.name .. "', use the Teleport button in Options,")
+    self:Print("or create a macro: |cFFFFCC00/click " .. btn:GetName() .. "|r")
 
-    if success then
+    return false
+end
+
+-- Direct teleport via secure button click (called from PostClick if needed)
+function addon:OnTeleportClicked(index)
+    local location = self.db.teleports[index]
+    if location then
         self:Print("Teleporting to: " .. location.name)
-    else
-        self:Print("Failed to teleport to: " .. location.name)
     end
-
-    return success
 end
 
 -------------------------------------------------------------------------------

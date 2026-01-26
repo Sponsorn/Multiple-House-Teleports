@@ -3,6 +3,8 @@
 ## Notes: Save and teleport to multiple housing locations.
 ## Author: Sponsorn
 ## Version: 1.0.0
+## License: CC BY-NC-SA 4.0
+## X-License-URL: https://creativecommons.org/licenses/by-nc-sa/4.0/
 ## SavedVariables: MultipleHouseTeleportsDB
 ## DefaultState: enabled
 ## IconTexture: Interface\Icons\Spell_Shadow_Teleport
@@ -10,8 +12,6 @@
 # Libraries
 Libs\LibStub.lua
 Libs\CallbackHandler-1.0\CallbackHandler-1.0.lua
-Libs\AceGUI-3.0\AceGUI-3.0.xml
-Libs\AceConfig-3.0\AceConfig-3.0.xml
 Libs\LibDataBroker-1.1.lua
 Libs\LibDBIcon-1.0.lua
 

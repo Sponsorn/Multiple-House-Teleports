@@ -38,11 +38,13 @@ local function InitializeDropdownMenu(self, level, menuList)
         else
             for i, loc in ipairs(locations) do
                 local info = UIDropDownMenu_CreateInfo()
-                info.text = loc.name
-                info.notCheckable = true
-                info.func = function()
-                    addon:TeleportTo(i)
+                -- Show neighborhood name if available
+                if loc.neighborhoodName and loc.neighborhoodName ~= "" then
+                    info.text = loc.name .. " |cFF888888(" .. loc.neighborhoodName .. ")|r"
+                else
+                    info.text = loc.name
                 end
+                info.notCheckable = true
                 info.hasArrow = true
                 info.menuList = { type = "location", index = i, location = loc }
                 UIDropDownMenu_AddButton(info, level)
@@ -84,12 +86,21 @@ local function InitializeDropdownMenu(self, level, menuList)
         if menuList.type == "location" then
             local index = menuList.index
 
-            -- Teleport
+            -- Teleport (show macro info)
             local teleportInfo = UIDropDownMenu_CreateInfo()
-            teleportInfo.text = "Teleport"
+            teleportInfo.text = "Get Teleport Macro"
             teleportInfo.notCheckable = true
             teleportInfo.func = function()
-                addon:TeleportTo(index)
+                -- Set up the secure button
+                local btn = addon:GetSecureTeleportButton(index)
+                local loc = addon.db.teleports[index]
+                if loc and loc.neighborhoodGUID and loc.houseGUID and loc.plotID then
+                    btn:SetTeleportAction(loc.neighborhoodGUID, loc.houseGUID, loc.plotID)
+                end
+                -- Show macro info
+                addon:Print("Macro for '" .. (loc and loc.name or "location") .. "':")
+                addon:Print("|cFFFFCC00/click " .. btn:GetName() .. "|r")
+                addon:Print("Or use the Teleport button in Options (|cFFFFCC00/mht options|r)")
             end
             UIDropDownMenu_AddButton(teleportInfo, level)
 
@@ -165,22 +176,28 @@ StaticPopupDialogs["MHT_ADD_LOCATION"] = {
     hasEditBox = true,
     maxLetters = 50,
     OnAccept = function(self)
-        local name = self.editBox:GetText()
+        local name = self.EditBox:GetText()
         addon:AddCurrentLocation(name)
+        if addon.RefreshOptionsLocations then
+            addon:RefreshOptionsLocations()
+        end
     end,
     OnShow = function(self)
         -- Try to pre-fill with plot info
         local info = addon:GetCurrentLocationInfo()
         if info then
             local defaultName = info.plotName or info.ownerName or ""
-            self.editBox:SetText(defaultName)
-            self.editBox:HighlightText()
+            self.EditBox:SetText(defaultName)
+            self.EditBox:HighlightText()
         end
     end,
     EditBoxOnEnterPressed = function(self)
         local parent = self:GetParent()
         local name = self:GetText()
         addon:AddCurrentLocation(name)
+        if addon.RefreshOptionsLocations then
+            addon:RefreshOptionsLocations()
+        end
         parent:Hide()
     end,
     EditBoxOnEscapePressed = function(self)
@@ -203,18 +220,27 @@ StaticPopupDialogs["MHT_RENAME_LOCATION"] = {
     button2 = "Cancel",
     hasEditBox = true,
     maxLetters = 50,
-    OnAccept = function(self, data)
-        local name = self.editBox:GetText()
+    OnAccept = function(self)
+        local data = self.data
+        local name = self.EditBox:GetText()
         addon:RenameLocation(data.index, name)
+        if addon.RefreshOptionsLocations then
+            addon:RefreshOptionsLocations()
+        end
     end,
-    OnShow = function(self, data)
-        self.editBox:SetText(data.currentName or "")
-        self.editBox:HighlightText()
+    OnShow = function(self)
+        local data = self.data
+        self.EditBox:SetText(data and data.currentName or "")
+        self.EditBox:HighlightText()
     end,
     EditBoxOnEnterPressed = function(self)
         local parent = self:GetParent()
+        local data = parent.data
         local name = self:GetText()
-        addon:RenameLocation(parent.data.index, name)
+        addon:RenameLocation(data.index, name)
+        if addon.RefreshOptionsLocations then
+            addon:RefreshOptionsLocations()
+        end
         parent:Hide()
     end,
     EditBoxOnEscapePressed = function(self)
@@ -230,12 +256,8 @@ function addon:ShowRenameDialog(index)
     local location = addon.db.teleports[index]
     if not location then return end
 
-    local dialog = StaticPopup_Show("MHT_RENAME_LOCATION")
-    if dialog then
-        dialog.data = { index = index, currentName = location.name }
-        dialog.editBox:SetText(location.name)
-        dialog.editBox:HighlightText()
-    end
+    local data = { index = index, currentName = location.name }
+    StaticPopup_Show("MHT_RENAME_LOCATION", nil, nil, data)
 end
 
 -- Delete Confirmation Dialog
@@ -243,8 +265,12 @@ StaticPopupDialogs["MHT_DELETE_CONFIRM"] = {
     text = "Delete location '%s'?",
     button1 = "Delete",
     button2 = "Cancel",
-    OnAccept = function(self, data)
+    OnAccept = function(self)
+        local data = self.data
         addon:RemoveLocation(data.index)
+        if addon.RefreshOptionsLocations then
+            addon:RefreshOptionsLocations()
+        end
     end,
     timeout = 0,
     whileDead = true,
@@ -256,10 +282,8 @@ function addon:ShowDeleteConfirmDialog(index)
     local location = addon.db.teleports[index]
     if not location then return end
 
-    local dialog = StaticPopup_Show("MHT_DELETE_CONFIRM", location.name)
-    if dialog then
-        dialog.data = { index = index }
-    end
+    local data = { index = index }
+    StaticPopup_Show("MHT_DELETE_CONFIRM", location.name, nil, data)
 end
 
 -------------------------------------------------------------------------------
