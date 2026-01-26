@@ -83,10 +83,21 @@ local function CreateLocationRow(parent, index, location, totalCount)
     indexText:SetText(index .. ".")
     indexText:SetTextColor(0.6, 0.6, 0.6)
 
-    -- Location name with neighborhood info
+    -- Location name with neighborhood info (type and name)
     local displayName = location.name
+    local neighborhoodInfo = ""
+    if location.neighborhoodType and location.neighborhoodType ~= "" then
+        neighborhoodInfo = location.neighborhoodType
+    end
     if location.neighborhoodName and location.neighborhoodName ~= "" then
-        displayName = displayName .. " |cFF888888(" .. location.neighborhoodName .. ")|r"
+        if neighborhoodInfo ~= "" then
+            neighborhoodInfo = neighborhoodInfo .. " - " .. location.neighborhoodName
+        else
+            neighborhoodInfo = location.neighborhoodName
+        end
+    end
+    if neighborhoodInfo ~= "" then
+        displayName = displayName .. " |cFF888888(" .. neighborhoodInfo .. ")|r"
     end
 
     local nameText = row:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
@@ -116,40 +127,10 @@ local function CreateLocationRow(parent, index, location, totalCount)
         end
     end)
 
-    -- Move Down button
-    local downBtn = CreateFrame("Button", nil, buttonContainer, "UIPanelButtonTemplate")
-    downBtn:SetSize(28, 24)
-    downBtn:SetPoint("RIGHT", deleteBtn, "LEFT", -4, 0)
-    downBtn:SetText("|TInterface\\Buttons\\Arrow-Down-Up:12:12:0:-3|t")
-    local canMoveDown = index < totalCount
-    downBtn:SetEnabled(canMoveDown)
-    downBtn:SetScript("OnClick", function()
-        addon:MoveLocationDown(index)
-        addon:RefreshOptionsLocations()
-    end)
-    if not canMoveDown then
-        downBtn:GetFontString():SetTextColor(0.4, 0.4, 0.4)
-    end
-
-    -- Move Up button
-    local upBtn = CreateFrame("Button", nil, buttonContainer, "UIPanelButtonTemplate")
-    upBtn:SetSize(28, 24)
-    upBtn:SetPoint("RIGHT", downBtn, "LEFT", -2, 0)
-    upBtn:SetText("|TInterface\\Buttons\\Arrow-Up-Up:12:12:0:3|t")
-    local canMoveUp = index > 1
-    upBtn:SetEnabled(canMoveUp)
-    upBtn:SetScript("OnClick", function()
-        addon:MoveLocationUp(index)
-        addon:RefreshOptionsLocations()
-    end)
-    if not canMoveUp then
-        upBtn:GetFontString():SetTextColor(0.4, 0.4, 0.4)
-    end
-
     -- Rename button
     local renameBtn = CreateFrame("Button", nil, buttonContainer, "UIPanelButtonTemplate")
     renameBtn:SetSize(60, 24)
-    renameBtn:SetPoint("RIGHT", upBtn, "LEFT", -8, 0)
+    renameBtn:SetPoint("RIGHT", deleteBtn, "LEFT", -4, 0)
     renameBtn:SetText("Rename")
     renameBtn:SetScript("OnClick", function()
         addon:ShowRenameDialog(index)
@@ -354,11 +335,49 @@ local function CreateOptionsFrame()
         scrollContent:SetWidth(self:GetWidth() - 30)
     end)
 
-    -- Create Default Home Macro button
+    -- Description text about macros
+    local macroDesc = frame:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+    macroDesc:SetPoint("TOPLEFT", scrollContainer, "BOTTOMLEFT", 0, -8)
+    macroDesc:SetPoint("RIGHT", frame, "RIGHT", -16, 0)
+    macroDesc:SetJustifyH("LEFT")
+    macroDesc:SetText("Each location creates a macro. Drag macros from |cFFFFCC00/macro|r to your action bar.")
+
+    -- Macro slots text
+    local macroSlotsText = frame:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+    macroSlotsText:SetPoint("TOPLEFT", macroDesc, "BOTTOMLEFT", 0, -4)
+    macroSlotsText:SetJustifyH("LEFT")
+
+    local function UpdateMacroSlotsText()
+        local numGlobal = GetNumMacros()
+        local available = MAX_ACCOUNT_MACROS - numGlobal
+        local color = available > 5 and "|cFF00FF00" or (available > 0 and "|cFFFFFF00" or "|cFFFF4444")
+        macroSlotsText:SetText("Macro slots: " .. color .. numGlobal .. "/" .. MAX_ACCOUNT_MACROS .. "|r (" .. available .. " available)")
+    end
+
+    -- Add Location button (left side)
+    local addLocationBtn = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
+    addLocationBtn:SetSize(160, 28)
+    addLocationBtn:SetPoint("TOPLEFT", macroSlotsText, "BOTTOMLEFT", 0, -8)
+    addLocationBtn:SetText("Add Current Location")
+    addLocationBtn:SetScript("OnClick", function()
+        addon:ShowAddLocationDialog()
+    end)
+    addLocationBtn:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:SetText("Add Current Location", 1, 1, 1)
+        GameTooltip:AddLine("Save your current plot location. You must be inside a housing plot.", nil, nil, nil, true)
+        GameTooltip:Show()
+    end)
+    addLocationBtn:SetScript("OnLeave", function()
+        GameTooltip:Hide()
+    end)
+
+    -- Create Default Home Macro button (right side)
     local homeMacroName = "MHT 0: My Home"
     local defaultMacroBtn = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
     defaultMacroBtn:SetSize(170, 28)
-    defaultMacroBtn:SetPoint("TOPLEFT", scrollContainer, "BOTTOMLEFT", 0, -12)
+    defaultMacroBtn:SetPoint("TOP", addLocationBtn, "TOP", 0, 0)
+    defaultMacroBtn:SetPoint("RIGHT", frame, "RIGHT", -16, 0)
     defaultMacroBtn:SetText("Create Home Macro")
     defaultMacroBtn.macroName = homeMacroName
 
@@ -399,7 +418,7 @@ local function CreateOptionsFrame()
                     addon:Print("Created macro: |cFFFFCC00" .. homeMacroName .. "|r")
                     addon:Print("Drag it from the Macro panel (|cFFFFCC00/macro|r) to your action bar.")
                     self:SetText("Home Macro Exists")
-                    -- Keep disabled since macro now exists
+                    UpdateMacroSlotsText()
                 else
                     addon:Print("|cFFFF4444Failed to create macro.|r")
                     UpdateHomeMacroButtonState()
@@ -421,27 +440,10 @@ local function CreateOptionsFrame()
         GameTooltip:Hide()
     end)
 
-    -- Store reference for updating on show
+    -- Store references for updating on show
     frame.defaultMacroBtn = defaultMacroBtn
     frame.UpdateHomeMacroButtonState = UpdateHomeMacroButtonState
-
-    -- Add Location button
-    local addLocationBtn = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
-    addLocationBtn:SetSize(160, 28)
-    addLocationBtn:SetPoint("LEFT", defaultMacroBtn, "RIGHT", 8, 0)
-    addLocationBtn:SetText("Add Current Location")
-    addLocationBtn:SetScript("OnClick", function()
-        addon:ShowAddLocationDialog()
-    end)
-    addLocationBtn:SetScript("OnEnter", function(self)
-        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-        GameTooltip:SetText("Add Current Location", 1, 1, 1)
-        GameTooltip:AddLine("Save your current plot location. You must be inside a housing plot.", nil, nil, nil, true)
-        GameTooltip:Show()
-    end)
-    addLocationBtn:SetScript("OnLeave", function()
-        GameTooltip:Hide()
-    end)
+    frame.UpdateMacroSlotsText = UpdateMacroSlotsText
 
     -- Update button state based on whether we can add a location
     local function UpdateAddButtonState()
@@ -457,6 +459,7 @@ local function CreateOptionsFrame()
     frame:SetScript("OnShow", function(self)
         addon:RefreshOptionsLocations()
         UpdateAddButtonState()
+        UpdateMacroSlotsText()
         -- Update home macro button state
         if self.UpdateHomeMacroButtonState then
             self.UpdateHomeMacroButtonState()
@@ -466,7 +469,7 @@ local function CreateOptionsFrame()
     ---------------------------------------------------------------------------
     -- Commands Section
     ---------------------------------------------------------------------------
-    local commandsHeader = CreateSectionHeader(frame, "Commands", defaultMacroBtn, -20)
+    local commandsHeader = CreateSectionHeader(frame, "Commands", addLocationBtn, -20)
 
     local commandsText = frame:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
     commandsText:SetPoint("TOPLEFT", commandsHeader, "BOTTOMLEFT", 0, -8)

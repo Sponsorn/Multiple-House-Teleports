@@ -1,6 +1,26 @@
 local ADDON_NAME, addon = ...
 
 -------------------------------------------------------------------------------
+-- Neighborhood Info Cache
+-------------------------------------------------------------------------------
+
+local cachedNeighborhoodInfo = nil
+
+local neighborhoodInfoFrame = CreateFrame("Frame")
+neighborhoodInfoFrame:RegisterEvent("NEIGHBORHOOD_INFO_UPDATED")
+neighborhoodInfoFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
+neighborhoodInfoFrame:SetScript("OnEvent", function(self, event, ...)
+    if event == "NEIGHBORHOOD_INFO_UPDATED" then
+        cachedNeighborhoodInfo = ...
+    elseif event == "PLAYER_ENTERING_WORLD" then
+        -- Request neighborhood info when entering world (if in a neighborhood)
+        if C_HousingNeighborhood and C_HousingNeighborhood.RequestNeighborhoodInfo then
+            pcall(C_HousingNeighborhood.RequestNeighborhoodInfo)
+        end
+    end
+end)
+
+-------------------------------------------------------------------------------
 -- Secure Teleport Button Pool
 -------------------------------------------------------------------------------
 
@@ -228,10 +248,39 @@ function addon:GetCurrentLocationInfo()
         return nil
     end
 
-    -- Try to get neighborhood name
+    -- Try to get neighborhood name and type
     local neighborhoodName = nil
-    if houseInfo.neighborhoodGUID and C_HousingNeighborhood and C_HousingNeighborhood.GetNeighborhoodName then
-        neighborhoodName = C_HousingNeighborhood.GetNeighborhoodName(houseInfo.neighborhoodGUID)
+    local neighborhoodType = nil
+
+    -- Type strings lookup
+    local typeStrings = Enum and Enum.NeighborhoodOwnerType and {
+        [Enum.NeighborhoodOwnerType.None] = HOUSING_NEIGHBORHOODTYPE_PUBLIC or "Public",
+        [Enum.NeighborhoodOwnerType.Guild] = HOUSING_NEIGHBORHOODTYPE_GUILD or "Guild",
+        [Enum.NeighborhoodOwnerType.Charter] = HOUSING_NEIGHBORHOODTYPE_CHARTER or "Charter",
+    } or {}
+
+    if houseInfo.neighborhoodGUID and C_HousingNeighborhood then
+        if C_HousingNeighborhood.GetNeighborhoodName then
+            neighborhoodName = C_HousingNeighborhood.GetNeighborhoodName(houseInfo.neighborhoodGUID)
+        end
+
+        -- Try cached neighborhood info first (from NEIGHBORHOOD_INFO_UPDATED event)
+        if cachedNeighborhoodInfo and cachedNeighborhoodInfo.neighborhoodOwnerType then
+            neighborhoodType = typeStrings[cachedNeighborhoodInfo.neighborhoodOwnerType]
+        end
+
+        -- Fallback: try cornerstone info (if at cornerstone)
+        if not neighborhoodType and C_HousingNeighborhood.GetCornerstoneNeighborhoodInfo then
+            local ok, info = pcall(C_HousingNeighborhood.GetCornerstoneNeighborhoodInfo)
+            if ok and info and info.neighborhoodOwnerType then
+                neighborhoodType = typeStrings[info.neighborhoodOwnerType]
+            end
+        end
+
+        -- Request fresh neighborhood info for next time
+        if C_HousingNeighborhood.RequestNeighborhoodInfo then
+            pcall(C_HousingNeighborhood.RequestNeighborhoodInfo)
+        end
     end
 
     return {
@@ -239,6 +288,7 @@ function addon:GetCurrentLocationInfo()
         houseGUID = houseInfo.houseGUID,
         plotID = houseInfo.plotID,
         neighborhoodName = neighborhoodName,
+        neighborhoodType = neighborhoodType,
         -- Try to get a reasonable default name
         ownerName = houseInfo.ownerName,
         plotName = houseInfo.plotName,
@@ -290,6 +340,7 @@ function addon:AddCurrentLocation(name)
         houseGUID = info.houseGUID,
         plotID = info.plotID,
         neighborhoodName = info.neighborhoodName,
+        neighborhoodType = info.neighborhoodType,
         addedAt = time(),
     }
 
