@@ -4,8 +4,8 @@
 
 - Initial release
 - Save multiple housing plot locations
-- Teleport to any saved location via dropdown menu
-- Minimap icon with left-click menu and right-click options
-- Rename and reorder saved locations
-- Slash commands: /mht add, list, teleport, delete, options
-- AceConfig options panel
+- Create teleport macros for action bar
+- Home teleport macro support
+- Displays neighborhood type and name
+- Options panel integrated with WoW Settings
+- Slash commands: /mht add, list, delete, options
