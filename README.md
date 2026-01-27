@@ -32,6 +32,17 @@ A World of Warcraft addon for saving and teleporting to multiple housing plot lo
 | `/mht delete <#>` | Delete a location |
 | `/mht options` | Open options panel |
 
+## For Developers
+
+Want to integrate with MultipleHouseTeleports from your addon? See [DEVELOPERS.md](DEVELOPERS.md) for API documentation.
+
+Quick start:
+```lua
+if MultipleHouseTeleports then
+    local locations = MultipleHouseTeleports:GetLocations()
+end
+```
+
 ## License
 
 [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/)

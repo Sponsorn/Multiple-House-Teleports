@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.1.0] - 2026-01-27
+
+- Add global API reference (`_G.MultipleHouseTeleports`) for addon integration
+- Add developer documentation (DEVELOPERS.md)
+
 ## [1.0.0] - 2026-01-26
 
 - Initial release

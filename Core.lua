@@ -223,3 +223,9 @@ SlashCmdList["MULTIPLEHOUSETELEPORTS"] = function(msg)
         Print("Unknown command. Use /mht help for a list of commands.")
     end
 end
+
+-------------------------------------------------------------------------------
+-- Global Reference (for other addons)
+-------------------------------------------------------------------------------
+
+_G.MultipleHouseTeleports = addon
