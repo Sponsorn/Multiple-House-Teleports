@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.1.1] - 2026-01-31
+
+- Fixed teleport cooldown check incorrectly blocking saved location buttons that have no cooldown
+- Teleport macros now work immediately after UI reload
+
 ## [1.1.0] - 2026-01-27
 
 - Add global API reference (`_G.MultipleHouseTeleports`) for addon integration

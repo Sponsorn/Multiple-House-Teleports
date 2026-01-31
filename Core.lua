@@ -143,6 +143,9 @@ function addon:OnLogin()
     -- Register housing events
     self:RegisterEvent("HOUSE_PLOT_ENTERED", self.OnPlotEntered)
     self:RegisterEvent("CURRENT_HOUSE_INFO_RECIEVED", self.OnHouseInfoReceived)
+
+    -- Set up default home button so the home macro works after reload
+    self:RequestPlayerHouseInfo()
 end
 
 -------------------------------------------------------------------------------

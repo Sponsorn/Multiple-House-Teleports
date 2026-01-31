@@ -397,6 +397,11 @@ local function CreateOptionsFrame()
     openMacroBtn:SetPoint("LEFT", addLocationBtn, "RIGHT", 8, 0)
     openMacroBtn:SetText("Open Macro Window")
     openMacroBtn:SetScript("OnClick", function()
+        -- Close Settings first — WoW only allows one major panel at a time
+        if SettingsPanel and SettingsPanel:IsShown() then
+            HideUIPanel(SettingsPanel)
+        end
+
         if not MacroFrame then
             MacroFrame_LoadUI()
         end

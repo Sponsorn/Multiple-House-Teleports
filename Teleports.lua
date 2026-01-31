@@ -57,6 +57,27 @@ function TeleportButtonMixin:OnEvent(event)
     end
 end
 
+-------------------------------------------------------------------------------
+-- Teleport Cooldown Check (My Home only)
+-------------------------------------------------------------------------------
+
+function addon:CheckTeleportCooldown()
+    if not C_Housing or not C_Housing.GetVisitCooldownInfo then
+        return false
+    end
+
+    local cooldownInfo = C_Housing.GetVisitCooldownInfo()
+    if cooldownInfo and cooldownInfo.isEnabled then
+        local remaining = (cooldownInfo.startTime + cooldownInfo.duration) - GetTime()
+        if remaining > 1 then
+            local timeString = SecondsToTime(remaining, false, true)
+            UIErrorsFrame:TryDisplayMessage(0, ITEM_COOLDOWN_TIME:format("|cFFFFFFFF" .. timeString .. "|r"), 0.53, 0.67, 1.0)
+            return true
+        end
+    end
+    return false
+end
+
 local function CreateSecureTeleportButton(index)
     local btn = CreateFrame("Button", "MHT_TeleportButton" .. index, UIParent, "SecureActionButtonTemplate")
     Mixin(btn, TeleportButtonMixin)
@@ -123,6 +144,7 @@ local function CreateDefaultHomeButton()
     btn:SetScript("OnEvent", btn.OnEvent)
 
     btn:SetScript("PostClick", function(self)
+        if addon:CheckTeleportCooldown() then return end
         addon:Print("Teleporting to your home...")
     end)
 
@@ -217,6 +239,14 @@ function addon:InitTeleports()
     -- Ensure teleports table exists
     if not self.db.teleports then
         self.db.teleports = {}
+    end
+
+    -- Recreate secure buttons for all saved locations so macros work after reload
+    for i, location in ipairs(self.db.teleports) do
+        if location.neighborhoodGUID and location.houseGUID and location.plotID then
+            local btn = self:GetSecureTeleportButton(i)
+            btn:SetTeleportAction(location.neighborhoodGUID, location.houseGUID, location.plotID)
+        end
     end
 end
 
