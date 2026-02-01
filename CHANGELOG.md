@@ -1,6 +1,7 @@
 # Changelog
 
 ## [1.1.2] - 2026-02-01
+This fixes a very common "Permissions denied" created on exiting game
 - Add: Saved teleport data is now automatically refreshed on login and when entering houses
 - Add: Teleport errors from stale data are detected and the addon automatically tries the next possibility
 - Add: Teleport attempts now show which attempt you're on (e.g. "attempt 3/9")
