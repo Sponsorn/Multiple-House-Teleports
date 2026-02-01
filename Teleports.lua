@@ -9,6 +9,8 @@ local cachedNeighborhoodInfo = nil
 local neighborhoodInfoFrame = CreateFrame("Frame")
 neighborhoodInfoFrame:RegisterEvent("NEIGHBORHOOD_INFO_UPDATED")
 neighborhoodInfoFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
+neighborhoodInfoFrame:RegisterEvent("CURRENT_HOUSE_INFO_RECIEVED")
+neighborhoodInfoFrame:RegisterEvent("CURRENT_HOUSE_INFO_UPDATED")
 neighborhoodInfoFrame:SetScript("OnEvent", function(self, event, ...)
     if event == "NEIGHBORHOOD_INFO_UPDATED" then
         cachedNeighborhoodInfo = ...
@@ -16,6 +18,14 @@ neighborhoodInfoFrame:SetScript("OnEvent", function(self, event, ...)
         -- Request neighborhood info when entering world (if in a neighborhood)
         if C_HousingNeighborhood and C_HousingNeighborhood.RequestNeighborhoodInfo then
             pcall(C_HousingNeighborhood.RequestNeighborhoodInfo)
+        end
+    elseif event == "CURRENT_HOUSE_INFO_RECIEVED" or event == "CURRENT_HOUSE_INFO_UPDATED" then
+        -- Refresh saved GUIDs when entering any house (covers other players' houses)
+        if C_Housing and C_Housing.GetCurrentHouseInfo then
+            local info = C_Housing.GetCurrentHouseInfo()
+            if info and info.neighborhoodGUID and info.houseGUID and info.plotID then
+                addon:RefreshSavedGUIDs({ info })
+            end
         end
     end
 end)
@@ -78,6 +88,101 @@ function addon:CheckTeleportCooldown()
     return false
 end
 
+-------------------------------------------------------------------------------
+-- Stale GUID Auto-Retry
+-------------------------------------------------------------------------------
+
+local lastTeleportAttempt = nil  -- { index = N, time = GetTime(), isDefault = bool }
+local teleportAttemptCount = 0   -- number of consecutive clicks (resets on success)
+local RETRY_WINDOW = 1.5  -- seconds to wait for error after click
+
+-- Error strings that indicate a stale houseGUID (resolved at runtime)
+local STALE_GUID_ERRORS = {}
+local function BuildStaleErrorSet()
+    local keys = {
+        "ERR_HOUSING_RESULT_PERMISSION_DENIED",
+        "ERR_HOUSING_RESULT_HOUSE_NOT_FOUND",
+        "ERR_HOUSING_RESULT_INVALID_HOUSE",
+    }
+    for _, key in ipairs(keys) do
+        local text = _G[key]
+        if text then
+            STALE_GUID_ERRORS[text] = true
+        end
+    end
+end
+
+local function IncrementHouseGUID(guid)
+    if not guid then return nil end
+    local prefix, num = guid:match("^(.+-)(%d+)$")
+    if prefix and num then
+        local next = (tonumber(num) % 9) + 1  -- wrap: 1→2→...→9→1
+        return prefix .. next, next
+    end
+    return nil
+end
+
+local function OnTeleportError(locationIndex, isDefault)
+    if isDefault then
+        -- Increment default home button GUID
+        if defaultHomeInfo and defaultHomeInfo.houseGUID then
+            local newGUID = IncrementHouseGUID(defaultHomeInfo.houseGUID)
+            if newGUID then
+                defaultHomeInfo.houseGUID = newGUID
+                local btn = addon:GetDefaultHomeButton()
+                btn:SetTeleportAction(defaultHomeInfo.neighborhoodGUID, newGUID, defaultHomeInfo.plotID)
+                addon:Print("Home GUID updated, try again (attempt " .. teleportAttemptCount .. "/9)")
+            end
+        end
+        return
+    end
+
+    local location = addon.db and addon.db.teleports and addon.db.teleports[locationIndex]
+    if not location or not location.houseGUID then return end
+
+    local newGUID = IncrementHouseGUID(location.houseGUID)
+    if not newGUID then return end
+
+    location.houseGUID = newGUID
+
+    -- Update the secure button
+    local btn = secureTeleportButtons[locationIndex]
+    if btn then
+        btn:SetTeleportAction(location.neighborhoodGUID, newGUID, location.plotID)
+    end
+
+    addon:Print("Teleport failed for '" .. location.name .. "', try the macro again (attempt " .. teleportAttemptCount .. "/9)")
+end
+
+local staleGUIDFrame = CreateFrame("Frame")
+staleGUIDFrame:RegisterEvent("UI_ERROR_MESSAGE")
+staleGUIDFrame:RegisterEvent("PLAYER_LOGIN")
+staleGUIDFrame:SetScript("OnEvent", function(self, event, ...)
+    if event == "PLAYER_LOGIN" then
+        BuildStaleErrorSet()
+        self:UnregisterEvent("PLAYER_LOGIN")
+        return
+    end
+
+    -- UI_ERROR_MESSAGE: arg1 = errorType, arg2 = message
+    if event == "UI_ERROR_MESSAGE" then
+        local _, message = ...
+        if not lastTeleportAttempt then return end
+        if (GetTime() - lastTeleportAttempt.time) > RETRY_WINDOW then
+            lastTeleportAttempt = nil
+            return
+        end
+        if message and STALE_GUID_ERRORS[message] then
+            OnTeleportError(lastTeleportAttempt.index, lastTeleportAttempt.isDefault)
+            lastTeleportAttempt = nil
+        end
+    end
+end)
+
+-------------------------------------------------------------------------------
+-- Secure Teleport Button Creation
+-------------------------------------------------------------------------------
+
 local function CreateSecureTeleportButton(index)
     local btn = CreateFrame("Button", "MHT_TeleportButton" .. index, UIParent, "SecureActionButtonTemplate")
     Mixin(btn, TeleportButtonMixin)
@@ -86,11 +191,31 @@ local function CreateSecureTeleportButton(index)
     btn:SetScript("OnEvent", btn.OnEvent)
     btn.locationIndex = index
 
-    -- PostClick to show feedback
+    -- PostClick to show feedback and track attempt for stale GUID retry
     btn:SetScript("PostClick", function(self)
+        teleportAttemptCount = teleportAttemptCount + 1
+        local attemptInfo = { index = self.locationIndex, time = GetTime(), isDefault = false }
+        lastTeleportAttempt = attemptInfo
         local location = addon.db and addon.db.teleports and addon.db.teleports[self.locationIndex]
         if location then
             addon:Print("Teleporting to: " .. location.name)
+            -- Check for success after retry window (only if we had failures)
+            if teleportAttemptCount > 1 then
+                C_Timer.After(RETRY_WINDOW + 0.5, function()
+                    if lastTeleportAttempt == attemptInfo then
+                        lastTeleportAttempt = nil
+                        teleportAttemptCount = 0
+                        addon:Print("Found ID for: " .. location.name .. ", teleport should now work during this session.")
+                    end
+                end)
+            else
+                C_Timer.After(RETRY_WINDOW + 0.5, function()
+                    if lastTeleportAttempt == attemptInfo then
+                        lastTeleportAttempt = nil
+                        teleportAttemptCount = 0
+                    end
+                end)
+            end
         end
     end)
 
@@ -144,8 +269,28 @@ local function CreateDefaultHomeButton()
     btn:SetScript("OnEvent", btn.OnEvent)
 
     btn:SetScript("PostClick", function(self)
+        teleportAttemptCount = teleportAttemptCount + 1
+        local attemptInfo = { index = 0, time = GetTime(), isDefault = true }
+        lastTeleportAttempt = attemptInfo
         if addon:CheckTeleportCooldown() then return end
-        addon:Print("Teleporting to your home...")
+        addon:Print("Tried to teleport... (attempt " .. teleportAttemptCount .. "/9)")
+        -- Check for success after retry window (only if we had failures)
+        if teleportAttemptCount > 1 then
+            C_Timer.After(RETRY_WINDOW + 0.5, function()
+                if lastTeleportAttempt == attemptInfo then
+                    lastTeleportAttempt = nil
+                    teleportAttemptCount = 0
+                    addon:Print("Found it!")
+                end
+            end)
+        else
+            C_Timer.After(RETRY_WINDOW + 0.5, function()
+                if lastTeleportAttempt == attemptInfo then
+                    lastTeleportAttempt = nil
+                    teleportAttemptCount = 0
+                end
+            end)
+        end
     end)
 
     return btn
@@ -186,6 +331,7 @@ function addon:RequestPlayerHouseInfo(callback)
             -- Use the first house (primary home)
             local houseInfo = houseInfoList[1]
             addon:SetupDefaultHomeButton(houseInfo)
+            addon:RefreshSavedGUIDs(houseInfoList)
             if callback then callback(houseInfo) end
         else
             if callback then callback(nil) end
@@ -246,6 +392,34 @@ function addon:InitTeleports()
         if location.neighborhoodGUID and location.houseGUID and location.plotID then
             local btn = self:GetSecureTeleportButton(i)
             btn:SetTeleportAction(location.neighborhoodGUID, location.houseGUID, location.plotID)
+        end
+    end
+end
+
+function addon:RefreshSavedGUIDs(houseInfoList)
+    if not houseInfoList or not self.db or not self.db.teleports then return end
+
+    -- Build lookup: "neighborhoodGUID:plotID" → fresh houseGUID
+    local lookup = {}
+    for _, info in ipairs(houseInfoList) do
+        if info.neighborhoodGUID and info.houseGUID and info.plotID then
+            lookup[info.neighborhoodGUID .. ":" .. info.plotID] = info.houseGUID
+        end
+    end
+
+    -- Update any saved teleports with stale GUIDs
+    for i, location in ipairs(self.db.teleports) do
+        if location.neighborhoodGUID and location.plotID then
+            local key = location.neighborhoodGUID .. ":" .. location.plotID
+            local freshGUID = lookup[key]
+            if freshGUID and freshGUID ~= location.houseGUID then
+                location.houseGUID = freshGUID
+                -- Refresh the corresponding secure button
+                local btn = secureTeleportButtons[i]
+                if btn then
+                    btn:SetTeleportAction(location.neighborhoodGUID, freshGUID, location.plotID)
+                end
+            end
         end
     end
 end

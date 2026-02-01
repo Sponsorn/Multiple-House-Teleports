@@ -294,10 +294,15 @@ local function CreateOptionsFrame()
     desc:SetJustifyH("LEFT")
     desc:SetText("Save multiple housing plot locations and teleport between them.")
 
+    -- Credit
+    local credit = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+    credit:SetPoint("TOPLEFT", desc, "BOTTOMLEFT", 0, -4)
+    credit:SetText("Original discovery by TheIceBadger")
+
     ---------------------------------------------------------------------------
     -- General Settings Section
     ---------------------------------------------------------------------------
-    local generalHeader = CreateSectionHeader(panel, "General Settings", desc, -20)
+    local generalHeader = CreateSectionHeader(panel, "General Settings", credit, -16)
 
     local confirmDeleteCheck = CreateCheckbox(
         panel,
@@ -320,10 +325,23 @@ local function CreateOptionsFrame()
         end
     )
 
+    -- Stale ID info text
+    local staleInfoText = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+    staleInfoText:SetPoint("TOPLEFT", hideMinimapCheck, "BOTTOMLEFT", 0, -16)
+    staleInfoText:SetPoint("RIGHT", panel, "RIGHT", -16, 0)
+    staleInfoText:SetJustifyH("LEFT")
+    staleInfoText:SetSpacing(4)
+    staleInfoText:SetText(
+        "Housing IDs can become outdated when plots change. There are two ways to fix this:\n" ..
+        "  1. Visit the neighborhood and plot — the ID updates automatically on arrival.\n" ..
+        "  2. Press the teleport macro repeatedly — the addon cycles through possible IDs (up to 9 attempts).\n\n" ..
+        "|cFFFF9900Note:|r Some teleport failures are not caused by outdated IDs. See \"Common reasons\" below."
+    )
+
     ---------------------------------------------------------------------------
     -- Saved Locations Section
     ---------------------------------------------------------------------------
-    local locationsHeader = CreateSectionHeader(panel, "Saved Locations", hideMinimapCheck, -20)
+    local locationsHeader = CreateSectionHeader(panel, "Saved Locations", staleInfoText, -16)
 
     -- Scroll frame for locations
     local scrollContainer = CreateFrame("Frame", nil, panel, "BackdropTemplate")

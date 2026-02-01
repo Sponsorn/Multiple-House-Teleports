@@ -1,9 +1,22 @@
 # Changelog
 
+## [1.1.2] - 2026-02-01
+- Saved teleport data is now automatically refreshed on login and when entering houses
+- Teleport errors from stale data are detected and the addon automatically tries the next possibility
+- Teleport attempts now show which attempt you're on (e.g. "attempt 3/9")
+- Success message when teleport completes
+- Added credit to TheIceBadger on options screen
+- Changed license from CC BY-NC-SA to CC BY-NC
+
+## [1.1.1b] - 2026-02-01
+- Fix zip file not extracting as folder on macOS/Linux
+
 ## [1.1.1] - 2026-01-31
 
-- Fixed teleport cooldown check incorrectly blocking saved location buttons that have no cooldown
-- Teleport macros now work immediately after UI reload
+Currently blizzard is not adding a cooldown to buttons outside of "My home"-teleports, which means you can use the macros as often as you want.
+- Add: Message when there is cooldown remaining on house teleport.
+- Fix: teleport cooldown check incorrectly blocking saved location buttons that have no cooldown
+- Fix: Teleport macros now work immediately after UI reload/relog - im sure no one encountered this bug :)
 
 ## [1.1.0] - 2026-01-27
 
