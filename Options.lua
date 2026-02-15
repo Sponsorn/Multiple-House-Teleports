@@ -56,34 +56,65 @@ end
 -- Location Row
 -------------------------------------------------------------------------------
 
-local function CreateLocationRow(parent, index, location, totalCount)
+local locationRowPool = {}
+
+local function CreateLocationRowFrame(parent)
     local row = CreateFrame("Frame", nil, parent)
     row:SetHeight(36)
     row:SetPoint("LEFT", 0, 0)
     row:SetPoint("RIGHT", 0, 0)
 
-    -- Background (alternating)
-    local bg = row:CreateTexture(nil, "BACKGROUND")
-    bg:SetAllPoints()
-    if index % 2 == 0 then
-        bg:SetColorTexture(1, 1, 1, 0.03)
-    else
-        bg:SetColorTexture(0, 0, 0, 0.03)
-    end
+    row.bg = row:CreateTexture(nil, "BACKGROUND")
+    row.bg:SetAllPoints()
 
-    -- Hover highlight
     local highlight = row:CreateTexture(nil, "HIGHLIGHT")
     highlight:SetAllPoints()
     highlight:SetColorTexture(1, 1, 1, 0.05)
 
-    -- Index number
-    local indexText = row:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
-    indexText:SetPoint("LEFT", 8, 0)
-    indexText:SetWidth(24)
-    indexText:SetText(index .. ".")
-    indexText:SetTextColor(0.6, 0.6, 0.6)
+    row.indexText = row:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+    row.indexText:SetPoint("LEFT", 8, 0)
+    row.indexText:SetWidth(24)
+    row.indexText:SetTextColor(0.6, 0.6, 0.6)
 
-    -- Location name with neighborhood info (type and name)
+    row.nameText = row:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+    row.nameText:SetPoint("LEFT", row.indexText, "RIGHT", 8, 0)
+    row.nameText:SetPoint("RIGHT", row, "CENTER", 40, 0)
+    row.nameText:SetJustifyH("LEFT")
+    row.nameText:SetWordWrap(false)
+
+    local buttonContainer = CreateFrame("Frame", nil, row)
+    buttonContainer:SetPoint("RIGHT", -8, 0)
+    buttonContainer:SetSize(260, 28)
+
+    row.deleteBtn = CreateFrame("Button", nil, buttonContainer, "UIPanelButtonTemplate")
+    row.deleteBtn:SetSize(60, 24)
+    row.deleteBtn:SetPoint("RIGHT", 0, 0)
+    row.deleteBtn:SetText("Delete")
+    row.deleteBtn:GetFontString():SetTextColor(1, 0.3, 0.3)
+
+    row.renameBtn = CreateFrame("Button", nil, buttonContainer, "UIPanelButtonTemplate")
+    row.renameBtn:SetSize(60, 24)
+    row.renameBtn:SetPoint("RIGHT", row.deleteBtn, "LEFT", -4, 0)
+    row.renameBtn:SetText("Rename")
+
+    row.macroBtn = CreateFrame("Button", nil, buttonContainer, "UIPanelButtonTemplate")
+    row.macroBtn:SetSize(85, 24)
+    row.macroBtn:SetPoint("RIGHT", row.renameBtn, "LEFT", -4, 0)
+
+    return row
+end
+
+local function UpdateLocationRow(row, index, location, totalCount)
+    -- Background (alternating)
+    if index % 2 == 0 then
+        row.bg:SetColorTexture(1, 1, 1, 0.03)
+    else
+        row.bg:SetColorTexture(0, 0, 0, 0.03)
+    end
+
+    row.indexText:SetText(index .. ".")
+
+    -- Location name with neighborhood info
     local displayName = location.name
     local neighborhoodInfo = ""
     if location.neighborhoodType and location.neighborhoodType ~= "" then
@@ -96,29 +127,20 @@ local function CreateLocationRow(parent, index, location, totalCount)
             neighborhoodInfo = location.neighborhoodName
         end
     end
+    if location.plotID then
+        if neighborhoodInfo ~= "" then
+            neighborhoodInfo = neighborhoodInfo .. ", Plot " .. location.plotID
+        else
+            neighborhoodInfo = "Plot " .. location.plotID
+        end
+    end
     if neighborhoodInfo ~= "" then
         displayName = displayName .. " |cFF888888(" .. neighborhoodInfo .. ")|r"
     end
+    row.nameText:SetText(displayName)
 
-    local nameText = row:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
-    nameText:SetPoint("LEFT", indexText, "RIGHT", 8, 0)
-    nameText:SetPoint("RIGHT", row, "CENTER", 40, 0)
-    nameText:SetJustifyH("LEFT")
-    nameText:SetText(displayName)
-    nameText:SetWordWrap(false)
-
-    -- Button container (right side)
-    local buttonContainer = CreateFrame("Frame", nil, row)
-    buttonContainer:SetPoint("RIGHT", -8, 0)
-    buttonContainer:SetSize(260, 28)
-
-    -- Delete button (rightmost)
-    local deleteBtn = CreateFrame("Button", nil, buttonContainer, "UIPanelButtonTemplate")
-    deleteBtn:SetSize(60, 24)
-    deleteBtn:SetPoint("RIGHT", 0, 0)
-    deleteBtn:SetText("Delete")
-    deleteBtn:GetFontString():SetTextColor(1, 0.3, 0.3)
-    deleteBtn:SetScript("OnClick", function()
+    -- Delete button
+    row.deleteBtn:SetScript("OnClick", function()
         if addon.db.options.confirmDelete then
             addon:ShowDeleteConfirmDialog(index)
         else
@@ -128,57 +150,44 @@ local function CreateLocationRow(parent, index, location, totalCount)
     end)
 
     -- Rename button
-    local renameBtn = CreateFrame("Button", nil, buttonContainer, "UIPanelButtonTemplate")
-    renameBtn:SetSize(60, 24)
-    renameBtn:SetPoint("RIGHT", deleteBtn, "LEFT", -4, 0)
-    renameBtn:SetText("Rename")
-    renameBtn:SetScript("OnClick", function()
+    row.renameBtn:SetScript("OnClick", function()
         addon:ShowRenameDialog(index)
     end)
 
-    -- Create Macro button - creates a macro for this teleport location
+    -- Macro button
     local macroName = "MHT " .. index .. ": " .. location.name
-    local macroBtn = CreateFrame("Button", nil, buttonContainer, "UIPanelButtonTemplate")
-    macroBtn:SetSize(85, 24)
-    macroBtn:SetPoint("RIGHT", renameBtn, "LEFT", -4, 0)
-    macroBtn:SetText("Create Macro")
-
-    -- Check if macro already exists and disable button if so
     local existingMacro = GetMacroIndexByName(macroName)
     if existingMacro and existingMacro > 0 then
-        macroBtn:Disable()
-        macroBtn:SetText("Macro Exists")
+        row.macroBtn:Disable()
+        row.macroBtn:SetText("Macro Exists")
+    else
+        row.macroBtn:Enable()
+        row.macroBtn:SetText("Create Macro")
     end
 
-    macroBtn:SetScript("OnClick", function()
-        -- Set up the secure button (hidden, for macro use)
+    row.macroBtn:SetScript("OnClick", function()
         local secureBtn = addon:GetSecureTeleportButton(index)
         if location.neighborhoodGUID and location.houseGUID and location.plotID then
             secureBtn:SetTeleportAction(location.neighborhoodGUID, location.houseGUID, location.plotID)
         end
 
-        -- Create the macro
         local macroBody = "/click " .. secureBtn:GetName()
 
-        -- Use numbered icons (texture IDs for 1-9) or home icon for 10+
         local macroIcon
         if index >= 1 and index <= 9 then
-            macroIcon = 6033345 + index  -- 6033346 (_1) to 6033354 (_9)
+            macroIcon = 6033345 + index
         else
-            macroIcon = 7252953  -- ui_homestone_64
+            macroIcon = 7252953
         end
 
-        -- Check macro limits
         local numGlobal, numPerChar = GetNumMacros()
         if numGlobal < MAX_ACCOUNT_MACROS then
-            -- Create new global macro
             local newIndex = CreateMacro(macroName, macroIcon, macroBody, false)
             if newIndex then
                 addon:Print("Created macro: |cFFFFCC00" .. macroName .. "|r")
                 addon:Print("Drag it from the Macro panel (|cFFFFCC00/macro|r) to your action bar.")
-                macroBtn:Disable()
-                macroBtn:SetText("Macro Exists")
-                -- Update macro slots counter
+                row.macroBtn:Disable()
+                row.macroBtn:SetText("Macro Exists")
                 if optionsFrame and optionsFrame.UpdateMacroSlotsText then
                     optionsFrame.UpdateMacroSlotsText()
                 end
@@ -190,7 +199,7 @@ local function CreateLocationRow(parent, index, location, totalCount)
             addon:Print("Delete an unused macro or manually create: |cFFFFCC00" .. macroBody .. "|r")
         end
     end)
-    macroBtn:SetScript("OnEnter", function(self)
+    row.macroBtn:SetScript("OnEnter", function(self)
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
         GameTooltip:SetText("Create Teleport Macro", 1, 1, 1)
         GameTooltip:AddLine("Creates macro |cFFFFCC00" .. macroName .. "|r to teleport to " .. location.name .. ".", 0.8, 0.8, 0.8, true)
@@ -199,47 +208,58 @@ local function CreateLocationRow(parent, index, location, totalCount)
         GameTooltip:AddLine("the Macro panel to your action bar.", 0.6, 0.6, 0.6, true)
         GameTooltip:Show()
     end)
-    macroBtn:SetScript("OnLeave", function()
+    row.macroBtn:SetScript("OnLeave", function()
         GameTooltip:Hide()
     end)
-
-    return row
 end
 
 -------------------------------------------------------------------------------
 -- Refresh Locations List
 -------------------------------------------------------------------------------
 
+local emptyStateText = nil
+
 function addon:RefreshOptionsLocations()
     if not locationsScrollBox then return end
 
-    -- Clear existing children (frames)
-    for _, child in pairs({locationsScrollBox.content:GetChildren()}) do
-        child:Hide()
-        child:SetParent(nil)
+    -- Hide all pooled rows
+    for _, row in ipairs(locationRowPool) do
+        row:Hide()
     end
 
-    -- Clear existing regions (font strings, textures)
-    for _, region in pairs({locationsScrollBox.content:GetRegions()}) do
-        region:Hide()
-        region:SetParent(nil)
+    -- Hide empty state text if it exists
+    if emptyStateText then
+        emptyStateText:Hide()
     end
 
     local locations = self:GetLocations()
 
     if #locations == 0 then
-        -- Empty state
-        local emptyText = locationsScrollBox.content:CreateFontString(nil, "ARTWORK", "GameFontDisable")
-        emptyText:SetPoint("TOPLEFT", 8, -16)
-        emptyText:SetPoint("RIGHT", -8, 0)
-        emptyText:SetJustifyH("LEFT")
-        emptyText:SetText("No saved locations.\n\nGo to a housing plot and click 'Add Current Location' below,\nor use |cFFFFCC00/mht add [name]|r")
+        -- Empty state (create once, reuse)
+        if not emptyStateText then
+            emptyStateText = locationsScrollBox.content:CreateFontString(nil, "ARTWORK", "GameFontDisable")
+            emptyStateText:SetPoint("TOPLEFT", 8, -16)
+            emptyStateText:SetPoint("RIGHT", -8, 0)
+            emptyStateText:SetJustifyH("LEFT")
+            emptyStateText:SetText("No saved locations.\n\nGo to a housing plot and click 'Add Current Location' below,\nor use |cFFFFCC00/mht add [name]|r")
+        end
+        emptyStateText:Show()
         locationsScrollBox.content:SetHeight(80)
     else
         local yOffset = 0
         for i, loc in ipairs(locations) do
-            local row = CreateLocationRow(locationsScrollBox.content, i, loc, #locations)
+            -- Reuse pooled row or create new one
+            local row = locationRowPool[i]
+            if not row then
+                row = CreateLocationRowFrame(locationsScrollBox.content)
+                locationRowPool[i] = row
+            end
+            UpdateLocationRow(row, i, loc, #locations)
+            row:ClearAllPoints()
             row:SetPoint("TOPLEFT", 0, yOffset)
+            row:SetPoint("LEFT", 0, 0)
+            row:SetPoint("RIGHT", 0, 0)
+            row:Show()
             yOffset = yOffset - 36
         end
         locationsScrollBox.content:SetHeight(math.max(80, #locations * 36))

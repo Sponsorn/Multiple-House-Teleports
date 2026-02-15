@@ -111,28 +111,6 @@ local function InitializeDropdownMenu(self, level, menuList)
             end
             UIDropDownMenu_AddButton(renameInfo, level)
 
-            -- Move Up (if not first)
-            if index > 1 then
-                local upInfo = UIDropDownMenu_CreateInfo()
-                upInfo.text = "Move Up"
-                upInfo.notCheckable = true
-                upInfo.func = function()
-                    addon:MoveLocationUp(index)
-                end
-                UIDropDownMenu_AddButton(upInfo, level)
-            end
-
-            -- Move Down (if not last)
-            if index < addon:GetLocationCount() then
-                local downInfo = UIDropDownMenu_CreateInfo()
-                downInfo.text = "Move Down"
-                downInfo.notCheckable = true
-                downInfo.func = function()
-                    addon:MoveLocationDown(index)
-                end
-                UIDropDownMenu_AddButton(downInfo, level)
-            end
-
             -- Delete
             local deleteInfo = UIDropDownMenu_CreateInfo()
             deleteInfo.text = "|cFFFF4444Delete|r"

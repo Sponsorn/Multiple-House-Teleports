@@ -182,12 +182,12 @@ SlashCmdList["MULTIPLEHOUSETELEPORTS"] = function(msg)
     local cmd = args[1] and args[1]:lower() or ""
 
     if cmd == "" or cmd == "help" then
-        Print("Commands:")
-        Print("  /mht add [name] - Add current location")
-        Print("  /mht list - List saved locations")
-        Print("  /mht delete <number> - Delete a location")
-        Print("  /mht teleport <number> - Teleport to a location")
-        Print("  /mht options - Open options panel")
+        addon:Print("Commands:")
+        addon:Print("  /mht add [name] - Add current location")
+        addon:Print("  /mht list - List saved locations")
+        addon:Print("  /mht delete <number> - Delete a location")
+        addon:Print("  /mht teleport <number> - Teleport to a location")
+        addon:Print("  /mht options - Open options panel")
 
     elseif cmd == "add" then
         -- Get name from remaining args
@@ -206,7 +206,7 @@ SlashCmdList["MULTIPLEHOUSETELEPORTS"] = function(msg)
         if index then
             addon:RemoveLocation(index)
         else
-            Print("Usage: /mht delete <number>")
+            addon:Print("Usage: /mht delete <number>")
         end
 
     elseif cmd == "teleport" or cmd == "tp" or cmd == "go" then
@@ -214,7 +214,7 @@ SlashCmdList["MULTIPLEHOUSETELEPORTS"] = function(msg)
         if index then
             addon:TeleportTo(index)
         else
-            Print("Usage: /mht teleport <number>")
+            addon:Print("Usage: /mht teleport <number>")
         end
 
     elseif cmd == "options" or cmd == "config" or cmd == "settings" then
@@ -223,7 +223,7 @@ SlashCmdList["MULTIPLEHOUSETELEPORTS"] = function(msg)
         end
 
     else
-        Print("Unknown command. Use /mht help for a list of commands.")
+        addon:Print("Unknown command. Use /mht help for a list of commands.")
     end
 end
 

@@ -1,7 +1,7 @@
 ## Interface: 120000, 120001
 ## Title: Multiple House Teleports
 ## Notes: Save and teleport to multiple housing locations.
-## Author: Sponsorn
+## Author: Dede in-game / Sponsorn on curseforge & github
 ## Version: 1.1.2
 ## License: CC BY-NC 4.0
 ## X-License-URL: https://creativecommons.org/licenses/by-nc/4.0/

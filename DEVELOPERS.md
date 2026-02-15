@@ -148,13 +148,6 @@ Gets the secure button for teleporting to the player's own home.
 
 - Returns: Button frame (named `MHT_DefaultHomeButton`).
 
-### Reordering
-
-#### `MHT:MoveLocationUp(index)` / `MHT:MoveLocationDown(index)`
-Reorders locations in the list.
-
-- Returns: `true` if moved, `false` if at boundary.
-
 ---
 
 ## Location Data Structure

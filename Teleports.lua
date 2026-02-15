@@ -89,11 +89,19 @@ function addon:CheckTeleportCooldown()
 end
 
 -------------------------------------------------------------------------------
+-- Default Home State (declared early so OnTeleportError can access them)
+-------------------------------------------------------------------------------
+
+local defaultHomeButton
+local defaultHomeInfo
+
+-------------------------------------------------------------------------------
 -- Stale GUID Auto-Retry
 -------------------------------------------------------------------------------
 
 local lastTeleportAttempt = nil  -- { index = N, time = GetTime(), isDefault = bool }
-local teleportAttemptCount = 0   -- number of consecutive clicks (resets on success)
+local lastTeleportIndex = nil    -- tracks which location for counter reset (survives error handler nil)
+local teleportAttemptCount = 0   -- number of consecutive clicks (resets on success or location switch)
 local RETRY_WINDOW = 1.5  -- seconds to wait for error after click
 
 -- Error strings that indicate a stale houseGUID (resolved at runtime)
@@ -192,7 +200,12 @@ local function CreateSecureTeleportButton(index)
     btn.locationIndex = index
 
     -- PostClick to show feedback and track attempt for stale GUID retry
-    btn:SetScript("PostClick", function(self)
+    btn:SetScript("PostClick", function(self, button, down)
+        if down then return end  -- Only count on mouse up (action fires on up)
+        if lastTeleportIndex ~= self.locationIndex then
+            teleportAttemptCount = 0
+        end
+        lastTeleportIndex = self.locationIndex
         teleportAttemptCount = teleportAttemptCount + 1
         local attemptInfo = { index = self.locationIndex, time = GetTime(), isDefault = false }
         lastTeleportAttempt = attemptInfo
@@ -257,9 +270,6 @@ end
 -- Default Home Button (index 0)
 -------------------------------------------------------------------------------
 
-local defaultHomeButton
-local defaultHomeInfo
-
 local function CreateDefaultHomeButton()
     local btn = CreateFrame("Button", "MHT_DefaultHomeButton", UIParent, "SecureActionButtonTemplate")
     Mixin(btn, TeleportButtonMixin)
@@ -268,12 +278,17 @@ local function CreateDefaultHomeButton()
     btn:Hide()
     btn:SetScript("OnEvent", btn.OnEvent)
 
-    btn:SetScript("PostClick", function(self)
+    btn:SetScript("PostClick", function(self, button, down)
+        if down then return end  -- Only count on mouse up (action fires on up)
+        if lastTeleportIndex ~= 0 then
+            teleportAttemptCount = 0
+        end
+        lastTeleportIndex = 0
         teleportAttemptCount = teleportAttemptCount + 1
         local attemptInfo = { index = 0, time = GetTime(), isDefault = true }
         lastTeleportAttempt = attemptInfo
         if addon:CheckTeleportCooldown() then return end
-        addon:Print("Tried to teleport... (attempt " .. teleportAttemptCount .. "/9)")
+        addon:Print("Teleporting home...")
         -- Check for success after retry window (only if we had failures)
         if teleportAttemptCount > 1 then
             C_Timer.After(RETRY_WINDOW + 0.5, function()
@@ -313,6 +328,24 @@ function addon:SetupDefaultHomeButton(houseInfo)
     return false
 end
 
+local houseInfoFrame = CreateFrame("Frame")
+local houseInfoCallback = nil
+
+houseInfoFrame:SetScript("OnEvent", function(self, event, houseInfoList)
+    self:UnregisterEvent("PLAYER_HOUSE_LIST_UPDATED")
+    local cb = houseInfoCallback
+    houseInfoCallback = nil
+
+    if houseInfoList and #houseInfoList > 0 then
+        local houseInfo = houseInfoList[1]
+        addon:SetupDefaultHomeButton(houseInfo)
+        addon:RefreshSavedGUIDs(houseInfoList)
+        if cb then cb(houseInfo) end
+    else
+        if cb then cb(nil) end
+    end
+end)
+
 function addon:RequestPlayerHouseInfo(callback)
     -- Request the player's owned houses from the server
     if not C_Housing or not C_Housing.GetPlayerOwnedHouses then
@@ -320,25 +353,8 @@ function addon:RequestPlayerHouseInfo(callback)
         return
     end
 
-    -- Register for the response event
-    local frame = CreateFrame("Frame")
-    frame:RegisterEvent("PLAYER_HOUSE_LIST_UPDATED")
-    frame:SetScript("OnEvent", function(self, event, houseInfoList)
-        self:UnregisterEvent("PLAYER_HOUSE_LIST_UPDATED")
-        self:SetScript("OnEvent", nil)
-
-        if houseInfoList and #houseInfoList > 0 then
-            -- Use the first house (primary home)
-            local houseInfo = houseInfoList[1]
-            addon:SetupDefaultHomeButton(houseInfo)
-            addon:RefreshSavedGUIDs(houseInfoList)
-            if callback then callback(houseInfo) end
-        else
-            if callback then callback(nil) end
-        end
-    end)
-
-    -- Request the house list
+    houseInfoCallback = callback
+    houseInfoFrame:RegisterEvent("PLAYER_HOUSE_LIST_UPDATED")
     C_Housing.GetPlayerOwnedHouses()
 end
 
@@ -527,10 +543,9 @@ function addon:AddCurrentLocation(name)
         end
     end
 
-    -- Check for duplicates
+    -- Check for duplicates (plotID is stable within a neighborhood; houseGUID can change)
     for i, loc in ipairs(self.db.teleports) do
         if loc.neighborhoodGUID == info.neighborhoodGUID and
-           loc.houseGUID == info.houseGUID and
            loc.plotID == info.plotID then
             self:Print("This location is already saved as: " .. loc.name)
             return false
@@ -577,6 +592,39 @@ function addon:RemoveLocation(index)
     end
 
     table.remove(self.db.teleports, index)
+
+    -- Renumber macros and rebuild secure buttons for all shifted locations
+    for i = index, #self.db.teleports do
+        local loc = self.db.teleports[i]
+
+        -- Rename macro from old index (i+1) to new index (i)
+        local oldMacroName = "MHT " .. (i + 1) .. ": " .. loc.name
+        local mi = GetMacroIndexByName(oldMacroName)
+        if mi and mi > 0 then
+            local newMacroName = "MHT " .. i .. ": " .. loc.name
+            local newBody = "/click MHT_TeleportButton" .. i
+            local newIcon
+            if i >= 1 and i <= 9 then
+                newIcon = 6033345 + i
+            else
+                newIcon = 7252953
+            end
+            EditMacro(mi, newMacroName, newIcon, newBody)
+        end
+
+        -- Rebuild secure button to match new index
+        local btn = self:GetSecureTeleportButton(i)
+        if loc.neighborhoodGUID and loc.houseGUID and loc.plotID then
+            btn:SetTeleportAction(loc.neighborhoodGUID, loc.houseGUID, loc.plotID)
+        end
+    end
+
+    -- Clear the button that's now beyond the list
+    local extraBtn = secureTeleportButtons[#self.db.teleports + 1]
+    if extraBtn then
+        extraBtn:SetTeleportAction(nil, nil, nil)
+    end
+
     self:Print("Removed location: " .. name)
 
     -- Update UI
@@ -687,38 +735,3 @@ function addon:OnTeleportClicked(index)
     end
 end
 
--------------------------------------------------------------------------------
--- Reordering
--------------------------------------------------------------------------------
-
-function addon:MoveLocationUp(index)
-    if index <= 1 or index > #self.db.teleports then
-        return false
-    end
-
-    local temp = self.db.teleports[index]
-    self.db.teleports[index] = self.db.teleports[index - 1]
-    self.db.teleports[index - 1] = temp
-
-    if self.UpdateMenuState then
-        self:UpdateMenuState()
-    end
-
-    return true
-end
-
-function addon:MoveLocationDown(index)
-    if index < 1 or index >= #self.db.teleports then
-        return false
-    end
-
-    local temp = self.db.teleports[index]
-    self.db.teleports[index] = self.db.teleports[index + 1]
-    self.db.teleports[index + 1] = temp
-
-    if self.UpdateMenuState then
-        self:UpdateMenuState()
-    end
-
-    return true
-end
