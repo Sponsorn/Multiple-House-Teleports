@@ -15,3 +15,11 @@ desktop.ini
 # Release
 *.zip
 release/
+
+# Dev/docs files (not part of the addon)
+CF-Description-MHT.md
+CLAUDE.md
+release-mht.ps1
+sync-addons.ps1
+review_v1.md
+

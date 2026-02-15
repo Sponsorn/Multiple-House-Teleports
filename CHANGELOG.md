@@ -1,11 +1,16 @@
 # Changelog
 
-## [1.1.3] - 2026-02-15
+## [1.2.0] - 2026-02-15
 - Fix: Slash commands (/mht help, etc.) caused an error due to Print being called in global scope
 - Fix: Deleting a location now correctly renumbers remaining macros and rebuilds teleport buttons
+- Fix: Teleport buttons silently failing after deletion until reload/relog
 - Fix: Memory leak from creating new frames on every house info request
 - Fix: Memory leak from orphaning UI frames on every Options panel refresh
 - Fix: Duplicate detection no longer fails after stale GUID cycling
+- Fix: Default home GUID retry was silently broken (dead code from variable scoping)
+- Fix: Teleport attempt counter double-counting clicks and carrying over between locations
+- Fix: Operations now blocked during combat to prevent errors
+- Fix: Database defaults now properly merge new settings for existing users
 - Remove: Location reordering (Move Up/Move Down) — was incompatible with macro system
 - Note: If you deleted locations in v1.1.2, existing macros may have stale data. Manually delete affected macros from the /macro panel and re-create them from Options.
 

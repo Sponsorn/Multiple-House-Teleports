@@ -166,6 +166,10 @@ local function UpdateLocationRow(row, index, location, totalCount)
     end
 
     row.macroBtn:SetScript("OnClick", function()
+        if InCombatLockdown() then
+            addon:Print("Cannot create macros during combat.")
+            return
+        end
         local secureBtn = addon:GetSecureTeleportButton(index)
         if location.neighborhoodGUID and location.houseGUID and location.plotID then
             secureBtn:SetTeleportAction(location.neighborhoodGUID, location.houseGUID, location.plotID)
@@ -389,7 +393,10 @@ local function CreateOptionsFrame()
 
     -- Update content width when frame resizes
     scrollContainer:SetScript("OnSizeChanged", function(self)
-        scrollContent:SetWidth(self:GetWidth() - 30)
+        local width = self:GetWidth() - 30
+        if width > 0 then
+            scrollContent:SetWidth(width)
+        end
     end)
 
     -- Description text about macros
@@ -470,6 +477,10 @@ local function CreateOptionsFrame()
     end
 
     defaultMacroBtn:SetScript("OnClick", function(self)
+        if InCombatLockdown() then
+            addon:Print("Cannot create macros during combat.")
+            return
+        end
         self:SetText("Loading...")
         self:Disable()
 

@@ -50,13 +50,18 @@ function TeleportButtonMixin:SetTeleportAction(neighborhoodGUID, houseGUID, plot
         self.pendingSetup = false
         self:SetAttribute("useOnKeyDown", false)
         self:RegisterForClicks("AnyDown", "AnyUp")
+        -- Clear previous action first to force engine re-initialization
+        -- (setting type=teleporthome when it's already teleporthome is a no-op
+        -- and the engine won't re-read the guid/plot attributes)
+        self:SetAttribute("type", nil)
+        self:SetAttribute("house-neighborhood-guid", nil)
+        self:SetAttribute("house-guid", nil)
+        self:SetAttribute("house-plot-id", nil)
         if neighborhoodGUID and houseGUID and plotID then
             self:SetAttribute("type", "teleporthome")
             self:SetAttribute("house-neighborhood-guid", neighborhoodGUID)
             self:SetAttribute("house-guid", houseGUID)
             self:SetAttribute("house-plot-id", plotID)
-        else
-            self:SetAttribute("type", nil)
         end
     end
 end
@@ -101,8 +106,10 @@ local defaultHomeInfo
 
 local lastTeleportAttempt = nil  -- { index = N, time = GetTime(), isDefault = bool }
 local lastTeleportIndex = nil    -- tracks which location for counter reset (survives error handler nil)
-local teleportAttemptCount = 0   -- number of consecutive clicks (resets on success or location switch)
+local lastTeleportTime = 0       -- GetTime() of last click, for stale counter reset
+local teleportAttemptCount = 0   -- number of consecutive clicks (resets on location switch or timeout)
 local RETRY_WINDOW = 1.5  -- seconds to wait for error after click
+local COUNTER_RESET_TIMEOUT = 30 -- seconds before counter resets for same location
 
 -- Error strings that indicate a stale houseGUID (resolved at runtime)
 local STALE_GUID_ERRORS = {}
@@ -127,18 +134,18 @@ local function IncrementHouseGUID(guid)
         local next = (tonumber(num) % 9) + 1  -- wrap: 1→2→...→9→1
         return prefix .. next, next
     end
+    addon:Print("Warning: GUID format not recognized for cycling: " .. tostring(guid))
     return nil
 end
 
 local function OnTeleportError(locationIndex, isDefault)
     if isDefault then
         -- Increment default home button GUID
-        if defaultHomeInfo and defaultHomeInfo.houseGUID then
+        if defaultHomeInfo and defaultHomeInfo.houseGUID and defaultHomeButton then
             local newGUID = IncrementHouseGUID(defaultHomeInfo.houseGUID)
             if newGUID then
                 defaultHomeInfo.houseGUID = newGUID
-                local btn = addon:GetDefaultHomeButton()
-                btn:SetTeleportAction(defaultHomeInfo.neighborhoodGUID, newGUID, defaultHomeInfo.plotID)
+                defaultHomeButton:SetTeleportAction(defaultHomeInfo.neighborhoodGUID, newGUID, defaultHomeInfo.plotID)
                 addon:Print("Home GUID updated, try again (attempt " .. teleportAttemptCount .. "/9)")
             end
         end
@@ -202,18 +209,18 @@ local function CreateSecureTeleportButton(index)
     -- PostClick to show feedback and track attempt for stale GUID retry
     btn:SetScript("PostClick", function(self, button, down)
         if down then return end  -- Only count on mouse up (action fires on up)
-        if lastTeleportIndex ~= self.locationIndex then
+        if lastTeleportIndex ~= self.locationIndex or (GetTime() - lastTeleportTime) > COUNTER_RESET_TIMEOUT then
             teleportAttemptCount = 0
         end
         lastTeleportIndex = self.locationIndex
+        lastTeleportTime = GetTime()
         teleportAttemptCount = teleportAttemptCount + 1
         local attemptInfo = { index = self.locationIndex, time = GetTime(), isDefault = false }
         lastTeleportAttempt = attemptInfo
         local location = addon.db and addon.db.teleports and addon.db.teleports[self.locationIndex]
         if location then
-            addon:Print("Teleporting to: " .. location.name)
-            -- Check for success after retry window (only if we had failures)
             if teleportAttemptCount > 1 then
+                addon:Print("Teleporting to: " .. location.name .. " (attempt " .. teleportAttemptCount .. "/9)")
                 C_Timer.After(RETRY_WINDOW + 0.5, function()
                     if lastTeleportAttempt == attemptInfo then
                         lastTeleportAttempt = nil
@@ -222,12 +229,7 @@ local function CreateSecureTeleportButton(index)
                     end
                 end)
             else
-                C_Timer.After(RETRY_WINDOW + 0.5, function()
-                    if lastTeleportAttempt == attemptInfo then
-                        lastTeleportAttempt = nil
-                        teleportAttemptCount = 0
-                    end
-                end)
+                addon:Print("Teleporting to: " .. location.name)
             end
         end
     end)
@@ -280,17 +282,17 @@ local function CreateDefaultHomeButton()
 
     btn:SetScript("PostClick", function(self, button, down)
         if down then return end  -- Only count on mouse up (action fires on up)
-        if lastTeleportIndex ~= 0 then
+        if lastTeleportIndex ~= 0 or (GetTime() - lastTeleportTime) > COUNTER_RESET_TIMEOUT then
             teleportAttemptCount = 0
         end
         lastTeleportIndex = 0
+        lastTeleportTime = GetTime()
         teleportAttemptCount = teleportAttemptCount + 1
         local attemptInfo = { index = 0, time = GetTime(), isDefault = true }
         lastTeleportAttempt = attemptInfo
         if addon:CheckTeleportCooldown() then return end
-        addon:Print("Teleporting home...")
-        -- Check for success after retry window (only if we had failures)
         if teleportAttemptCount > 1 then
+            addon:Print("Teleporting home... (attempt " .. teleportAttemptCount .. "/9)")
             C_Timer.After(RETRY_WINDOW + 0.5, function()
                 if lastTeleportAttempt == attemptInfo then
                     lastTeleportAttempt = nil
@@ -299,12 +301,7 @@ local function CreateDefaultHomeButton()
                 end
             end)
         else
-            C_Timer.After(RETRY_WINDOW + 0.5, function()
-                if lastTeleportAttempt == attemptInfo then
-                    lastTeleportAttempt = nil
-                    teleportAttemptCount = 0
-                end
-            end)
+            addon:Print("Teleporting home...")
         end
     end)
 
@@ -575,6 +572,11 @@ function addon:AddCurrentLocation(name)
 end
 
 function addon:RemoveLocation(index)
+    if InCombatLockdown() then
+        self:Print("Cannot delete locations during combat.")
+        return false
+    end
+
     if not self.db.teleports[index] then
         self:Print("Invalid location index: " .. tostring(index))
         return false
@@ -636,6 +638,11 @@ function addon:RemoveLocation(index)
 end
 
 function addon:RenameLocation(index, newName)
+    if InCombatLockdown() then
+        self:Print("Cannot rename locations during combat.")
+        return false
+    end
+
     if not self.db.teleports[index] then
         self:Print("Invalid location index: " .. tostring(index))
         return false
@@ -654,7 +661,7 @@ function addon:RenameLocation(index, newName)
     local macroIndex = GetMacroIndexByName(oldMacroName)
     if macroIndex and macroIndex > 0 then
         -- Get existing macro info to preserve icon and body
-        local name, icon, body = GetMacroInfo(macroIndex)
+        local _, icon, body = GetMacroInfo(macroIndex)
         if body then
             EditMacro(macroIndex, newMacroName, icon, body)
             self:Print("Updated macro: " .. newMacroName)

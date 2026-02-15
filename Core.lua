@@ -55,13 +55,20 @@ local function InitDatabase()
         MultipleHouseTeleportsDB = {}
     end
 
-    -- Apply defaults
+    -- Apply defaults (deep merge for nested tables)
     for key, value in pairs(DB_DEFAULTS) do
         if MultipleHouseTeleportsDB[key] == nil then
             if type(value) == "table" then
                 MultipleHouseTeleportsDB[key] = CopyTable(value)
             else
                 MultipleHouseTeleportsDB[key] = value
+            end
+        elseif type(value) == "table" and type(MultipleHouseTeleportsDB[key]) == "table" then
+            -- Merge missing nested keys (e.g. new options added in updates)
+            for k, v in pairs(value) do
+                if MultipleHouseTeleportsDB[key][k] == nil then
+                    MultipleHouseTeleportsDB[key][k] = v
+                end
             end
         end
     end

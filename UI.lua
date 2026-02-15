@@ -182,7 +182,7 @@ StaticPopupDialogs["MHT_ADD_LOCATION"] = {
     timeout = 0,
     whileDead = true,
     hideOnEscape = true,
-    preferredIndex = 3,
+
 }
 
 function addon:ShowAddLocationDialog()
@@ -225,7 +225,7 @@ StaticPopupDialogs["MHT_RENAME_LOCATION"] = {
     timeout = 0,
     whileDead = true,
     hideOnEscape = true,
-    preferredIndex = 3,
+
 }
 
 function addon:ShowRenameDialog(index)
@@ -251,7 +251,7 @@ StaticPopupDialogs["MHT_DELETE_CONFIRM"] = {
     timeout = 0,
     whileDead = true,
     hideOnEscape = true,
-    preferredIndex = 3,
+
 }
 
 function addon:ShowDeleteConfirmDialog(index)
@@ -281,7 +281,11 @@ local function CreateMinimapIcon()
         label = "House Teleports",
         OnClick = function(self, button)
             if button == "LeftButton" then
-                addon:OpenOptions()
+                if SettingsPanel and SettingsPanel:IsShown() then
+                    SettingsPanel:Hide()
+                else
+                    addon:OpenOptions()
+                end
             end
         end,
         OnTooltipShow = function(tooltip)
